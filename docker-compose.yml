@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: tim-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - tim_redis_data:/data
+    restart: unless-stopped
+
+  zookeeper:
+    image: zookeeper:3.9
+    container_name: tim-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOO_TICK_TIME: 2000
+      ZOO_INIT_LIMIT: 10
+      ZOO_SYNC_LIMIT: 5
+    volumes:
+      - tim_zookeeper_data:/data
+      - tim_zookeeper_datalog:/datalog
+    restart: unless-stopped
+
+volumes:
+  tim_redis_data:
+  tim_zookeeper_data:
+  tim_zookeeper_datalog:
