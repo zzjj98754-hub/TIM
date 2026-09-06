@@ -1,7 +1,6 @@
 package com.tuling.tim.gateway.service;
 
 import com.tuling.tim.common.enums.StatusEnum;
-import com.tuling.tim.gateway.api.vo.req.ChatReqVO;
 import com.tuling.tim.gateway.api.vo.req.LoginReqVO;
 import com.tuling.tim.gateway.api.vo.res.RegisterInfoResVO;
 import com.tuling.tim.gateway.api.vo.res.TIMServerResVO;
@@ -57,16 +56,6 @@ public interface AccountService {
      */
     TIMServerResVO loadRouteRelatedByUserId(Long userId);
 
-
-    /**
-     * 推送消息
-     *
-     * @param TIMServerResVO
-     * @param groupReqVO     消息
-     * @param sendUserId     发送者的ID
-     * @throws Exception
-     */
-    void pushMsg(TIMServerResVO TIMServerResVO, long sendUserId, ChatReqVO groupReqVO) throws Exception;
 
     /**
      * 用户下线

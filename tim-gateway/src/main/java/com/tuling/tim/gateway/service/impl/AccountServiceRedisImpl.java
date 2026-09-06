@@ -1,21 +1,13 @@
 package com.tuling.tim.gateway.service.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tuling.tim.common.enums.StatusEnum;
 import com.tuling.tim.common.exception.TIMException;
-import com.tuling.tim.common.pojo.TIMUserInfo;
-import com.tuling.tim.common.res.BaseResponse;
-import com.tuling.tim.common.util.JsonHttpClient;
 import com.tuling.tim.common.util.RouteInfoParseUtil;
-import com.tuling.tim.gateway.api.vo.req.ChatReqVO;
 import com.tuling.tim.gateway.api.vo.req.LoginReqVO;
 import com.tuling.tim.gateway.api.vo.res.RegisterInfoResVO;
 import com.tuling.tim.gateway.api.vo.res.TIMServerResVO;
 import com.tuling.tim.gateway.service.AccountService;
 import com.tuling.tim.gateway.service.UserInfoCacheService;
-import com.tuling.tim.server.api.vo.req.SendMsgReqVO;
-import okhttp3.OkHttpClient;
-import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,16 +35,12 @@ import static com.tuling.tim.gateway.constant.Constant.ROUTE_PREFIX;
 @Service
 public class AccountServiceRedisImpl implements AccountService {
     private final static Logger LOGGER = LoggerFactory.getLogger(AccountServiceRedisImpl.class);
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
     @Autowired
     private UserInfoCacheService userInfoCacheService;
-
-    @Autowired
-    private OkHttpClient okHttpClient;
 
     @Override
     public RegisterInfoResVO register(RegisterInfoResVO info) {
@@ -162,35 +150,6 @@ public class AccountServiceRedisImpl implements AccountService {
         routes.put(userId, TIMServerResVO);
     }
 
-
-    @Override
-    public void pushMsg(TIMServerResVO TIMServerResVO, long sendUserId, ChatReqVO groupReqVO) throws Exception {
-        TIMUserInfo timUserInfo = userInfoCacheService.loadUserInfoByUserId(sendUserId);
-
-        String url = "http://" + TIMServerResVO.getIp() + ":" + TIMServerResVO.getHttpPort();
-        SendMsgReqVO vo = new SendMsgReqVO(timUserInfo.getUserName() + ":" + groupReqVO.getMsg(), groupReqVO.getUserId());
-        Response response = null;
-        try {
-            response = JsonHttpClient.post(okHttpClient, url, "/sendMsg", vo);
-            if (response == null) {
-                throw new TIMException(StatusEnum.FAIL);
-            }
-            if (!response.isSuccessful()) {
-                throw new TIMException(StatusEnum.FAIL);
-            }
-            BaseResponse result = OBJECT_MAPPER.readValue(response.body().string(), BaseResponse.class);
-            if (result == null || !StatusEnum.SUCCESS.getCode().equals(result.getCode())) {
-                throw new TIMException(StatusEnum.FAIL);
-            }
-        } catch (Exception e) {
-            LOGGER.error("Exception", e);
-            throw e;
-        } finally {
-            if (response != null && response.body() != null) {
-                response.body().close();
-            }
-        }
-    }
 
     @Override
     public void offLine(Long userId) throws Exception {

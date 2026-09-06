@@ -5,8 +5,6 @@ import com.tuling.tim.common.res.BaseResponse;
 import com.tuling.tim.server.api.ServerApi;
 import com.tuling.tim.server.api.vo.req.SendMsgReqVO;
 import com.tuling.tim.server.api.vo.res.SendMsgResVO;
-import com.tuling.tim.server.server.TIMServer;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,9 +18,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/")
 public class IndexController implements ServerApi {
 
-    @Autowired
-    private TIMServer TIMServer;
-
 
     /**
      * @param sendMsgReqVO
@@ -32,7 +27,10 @@ public class IndexController implements ServerApi {
     @RequestMapping(value = "sendMsg", method = RequestMethod.POST)
     @ResponseBody
     public BaseResponse<SendMsgResVO> sendMsg(@RequestBody SendMsgReqVO sendMsgReqVO) {
-        return TIMServer.sendMsg(sendMsgReqVO);
+        BaseResponse<SendMsgResVO> response = new BaseResponse<>();
+        response.setCode(StatusEnum.FAIL.getCode());
+        response.setMessage("Deprecated: send messages through the authenticated Netty connection");
+        return response;
     }
 
 }
