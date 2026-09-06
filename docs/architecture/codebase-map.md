@@ -1,35 +1,25 @@
 # TIM 代码地图
 
-## 模块与当前职责
-
-| 模块 | 入口/核心类 | 当前结论 |
+| 模块 | 入口/核心类 | 职责 |
 |---|---|---|
-| `tim-common` | `ObjEncoder`, `ObjDecoder`, `ProtostuffUtil`, 路由算法 | 帧协议与工具；一致性哈希实现可用但默认未被选择。|
-| `tim-gateway` | `GatewayApplication`, `RouteController`, `ServerCache` | HTTP 登录/旧路由控制面；从 ZooKeeper 监听节点。|
-| `tim-server` | `TIMServerApplication`, `TIMServer`, `TIMServerHandle` | Netty 长连端点；含新可靠消息、组消息、MQ 适配层。|
-| `tim-client` | `TIMClient`, `TIMClientHandle` | CLI 客户端，先 HTTP login，再 TCP LOGIN；接收 CHAT 自动 ACK。|
-| `*-api` | `RouteApi` / `ServerApi` 与 VO | HTTP 契约，非 RPC 框架。|
+| `tim-common` | `ObjEncoder`, `ObjDecoder`, `ProtostuffUtil` | 自定义帧协议、序列化和公共模型 |
+| `tim-gateway` | `RouteController`, `ServerCache`, `ZKit` | 登录、节点选择和 ZooKeeper watch；旧推送接口仅返回弃用响应 |
+| `tim-server` | `TIMServer`, `TIMServerHandle`, `SessionSocketHolder` | Netty Reactor、认证会话、本地用户/群 Channel 映射 |
+| `tim-server` | `ReliableMessageService`, `OutboxRepository`, `RocketMqNodeMessageBus` | 幂等、历史消息、Outbox、MQ 转发、ACK/重试 |
+| `tim-server` | `OfflineMessageService`, `GroupMessageService` | 离线游标、MySQL 回退、群写扩散和读扩散 |
+| `tim-client` | `TIMClient`, `TIMClientHandle`, `ReConnectManager` | 登录、心跳、ACK、离线游标和指数退避重连 |
+| `*-api` | `RouteApi`, `ServerApi` | Gateway/server HTTP 契约 |
 
-## 两条并存链路
+## 真实数据面
 
-1. **旧路径（CONFIRMED，作为 legacy）**：客户端命令/HTTP Gateway → `RouteController#p2pRoute` 或 `groupRoute` → `AccountServiceRedisImpl#pushMsg` HTTP 调用目标 server `/sendMsg` → `TIMServer#sendMsg` → `SessionSocketHolder` socket write。它把 socket write 成功当作成功，不持久化、不 ACK、不重试。
-2. **新路径（CONFIRMED，但接入面不统一）**：客户端 `TIMClient#sendChat` 的 TCP `CHAT` → `TIMServerHandle` → `ReliableMessageService#accept`。`DemoMessageController` 也可直接调用 `accept`。它不经过 Gateway 旧路由 API。
-
-因此不能把二者合并描述为同一个“主链路”。详见 [实现矩阵](implementation-matrix.md) 和 [可靠性分析](reliability-analysis.md)。
-
-## 启动与节点
-
-`TIMServer` 是 Spring Bean，`@PostConstruct` 先 bind Netty（默认 TCP 9002），而 `TIMServerApplication#run` 随后另起 `registry-zk` 线程注册 ZK。`NioEventLoopGroup()` 未显式配置线程数，Netty 使用其默认值；没有独立业务线程池。`ZKit#createNode(path,data)` 使用 `zkClient.createEphemeral`，所以会话断开时 ZK 会自动移除节点（CONFIRMED）；`@PreDestroy` 仅关闭 EventLoop，未见显式主动删除节点。
-
-Gateway 通过 `ServerListListener` 注册 child listener，`ServerCache#updateCache` 读取 znode JSON 数据取得 `host:tcpPort:httpPort`。控制面是 ZooKeeper，不是 Nacos（E-ZK）。
+`TIMClient` 的 TCP `CHAT/GROUP_CHAT` → `TIMServerHandle` → 认证会话身份覆盖 senderId → `ReliableMessageService` → MySQL + Outbox → 本地 Channel 或 `RocketMqNodeMessageBus` → 目标节点本地 Channel → 客户端成功处理后 ACK。旧 HTTP `/p2pRoute`、`/groupRoute`、`/sendMsg` 已不再调用 socket push。
 
 ## 线程与连接
 
-| 位置 | 线程/执行面 | 风险 |
-|---|---|---|
-| server boss / worker | `NioEventLoopGroup()` 默认线程数 | 未配置、无度量；`channelRead0` 直接 JSON、Redis/JDBC/MQ 调用，可能阻塞 EventLoop。|
-| Spring `@Scheduled` | Spring 默认调度器（未显式 Bean） | 扫描 `pending`，内存状态重启丢失。|
-| client callback | 固定 core=max=`tim.callback.thread.pool.size`，有界队列 | 默认拒绝策略 AbortPolicy；满时异常回到 EventLoop。|
-| client reconnect | 1 线程 `ScheduledThreadPoolExecutor` | 固定 10 秒、无退避和 jitter；可能形成惊群。|
+Netty boss/worker 负责网络 I/O；`BeanConfig` 提供有界 `ArrayBlockingQueue` 业务线程池，Redis/JDBC/MQ 工作在业务线程。队列满时使用显式拒绝策略并计数，不使用 `CallerRunsPolicy` 将阻塞任务带回 EventLoop。Actuator/Micrometer 暴露线程池 active、queue、pool、completed、rejected 指标。
 
-`SessionSocketHolder` 用两个 `ConcurrentHashMap` 保存 `userId→NioSocketChannel` 与用户名。重复 TCP LOGIN 直接覆写；旧连接 `channelInactive` 会按 userId 删除新映射，故存在旧连接误删新会话风险（E-BIND）。
+`SessionSocketHolder` 使用线程安全的 `userId -> Channel`、`Channel -> ConnectionSession` 和 `groupId -> Channel集合`；新连接替换旧连接，断开清理使用比较删除和 session/epoch 匹配，避免旧连接误删新路由。
+
+## 验证边界
+
+协议、会话、幂等、ACK、离线和群策略有自动化测试；Redis、MySQL、ZooKeeper、RocketMQ 的双节点运行态需要 Docker daemon 可用后由 `scripts/smoke-test.*` 和端到端客户端继续验证。
