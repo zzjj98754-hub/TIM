@@ -50,6 +50,7 @@ public class TIMClient {
     private String userName;
 
     private SocketChannel channel;
+    private String connectToken;
 
     @Autowired
     private EchoService echoService;
@@ -155,6 +156,10 @@ public class TIMClient {
             //保存系统信息
             clientInfo.saveServiceInfo(timServer.getIp() + ":" + timServer.getTimServerPort())
                     .saveUserInfo(userId, userName);
+            connectToken = timServer.getConnectToken();
+            if (connectToken == null || connectToken.isBlank()) {
+                throw new IllegalStateException("gateway did not return a connect token");
+            }
 
             LOGGER.info("timServer=[{}]", timServer.toString());
         } catch (Exception e) {
@@ -177,13 +182,14 @@ public class TIMClient {
         java.util.Map<String, Object> loginPayload = new java.util.HashMap<>();
         loginPayload.put("userName", userName);
         loginPayload.put("offlineCursor", offlineCursorStore.current());
+        loginPayload.put("connectToken", connectToken);
         String payload;
         try {
             payload = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(loginPayload);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalStateException("cannot encode login payload", e);
         }
-        TIMReqMsg login = new TIMReqMsg(userId, payload, Constants.CommandType.LOGIN);
+        TIMReqMsg login = new TIMReqMsg(0L, payload, Constants.CommandType.LOGIN);
         ChannelFuture future = channel.writeAndFlush(login);
         future.addListener((ChannelFutureListener) channelFuture ->
                 echoService.echo("Registry tim server success!")

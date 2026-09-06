@@ -27,18 +27,17 @@ public class ZKit {
      * 创建父级节点
      */
     public void createRootNode() {
-        boolean exists = zkClient.exists(appConfiguration.getZkRoot());
-        if (exists) {
-            return;
-        }
+        String root = appConfiguration.getZkRoot();
+        if (zkClient.exists(root)) return;
 
-        // Multiple TIM nodes can start concurrently. Treat a create race as
-        // success only after confirming another node created the same root.
+        // Create every missing path segment so a fresh ZooKeeper can be used
+        // without a manual bootstrap step. createPersistent(path, true) is
+        // safe when multiple TIM nodes start concurrently.
         try {
-            zkClient.createPersistent(appConfiguration.getZkRoot());
+            zkClient.createPersistent(root, true);
         } catch (RuntimeException createRace) {
-            if (!zkClient.exists(appConfiguration.getZkRoot())) throw createRace;
-            logger.debug("Zookeeper root was created concurrently: {}", appConfiguration.getZkRoot());
+            if (!zkClient.exists(root)) throw createRace;
+            logger.debug("Zookeeper root was created concurrently: {}", root);
         }
     }
 

@@ -1,11 +1,11 @@
 # TIM implementation handoff
 
 ## Current phase
-Resume-alignment implementation and documentation complete locally; middleware smoke test attempted but blocked by Docker Hub image authorization/network access.
+Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; authentication, route renewal, durable delivery records, and continuous offline cursors are implemented and tested locally.
 
 ## Completed in this phase
 - Audited the existing multi-module Java 17 TIM project and preserved all pre-existing user changes.
-- Confirmed the existing Maven test suite passes: 39 common, 1 server, 25 client, and 4 gateway tests.
+- Confirmed the current Maven test suite passes: 105 tests, 0 failures, 0 errors, 0 skips.
 - Confirmed `docker compose config` succeeds.
 - Added Actuator health/metrics exposure to `tim-server`.
 - Added two separately configured TIM service containers to Compose with distinct node IDs, HTTP ports, and Netty ports.
@@ -35,6 +35,21 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - Added health checks for Redis, MySQL, ZooKeeper, RocketMQ NameServer/Broker and health-gated dependencies for both TIM nodes in Compose.
 - Added configurable 64 KiB default business-content validation at the Netty handler before persistence, routing, or MQ work.
 - Corrected TIM Compose health checks to use the `curl` binary installed by `Dockerfile.tim-server` instead of unavailable `wget`.
+- Added short-lived HMAC-SHA256 Gateway-to-Netty connect tokens bound to user, serverId, expiry, and nonce.
+- Added durable `message_delivery` records and recipient-scoped conditional ACK updates; the JVM pending map remains only an acceleration cache.
+- Added authenticated-session checks for ACK frames and atomic route renewal on heartbeat outside the Netty EventLoop.
+- Added durable offline cursor reuse and a client continuous-prefix cursor store with optional atomic local-file persistence.
+- Changed group broadcast publication to `GROUP_MESSAGE_CREATED` through the transactional Outbox; Relay broadcasts only after commit.
+- Added scheduled MySQL-to-Redis offline projection rebuild, bounded by `tim.offline.max-size`, for Redis cache loss/recovery.
+- Fixed Compose runtime validation: ZooKeeper/RocketMQ health checks no longer depend on missing `nc`; MySQL host port is configurable with `TIM_MYSQL_PORT`; Flyway is the Compose schema owner; and RocketMQ Bus initialization no longer forms a Spring circular dependency.
+- Fixed Gateway method-validation startup failures by keeping `@Valid` constraints on the `RouteApi` contract instead of redefining them only in `RouteController`.
+- Made TIM nodes recursively create a missing ZooKeeper root path, so a fresh ensemble does not require manual `/im` bootstrap.
+- Made the client's first login attempt explicitly non-reconnect, avoiding null unboxing after a failed Gateway login.
+- Fixed the durable Delivery lease parameter order and replaced MySQL-only lease date expressions with explicit timestamps verified against H2 in MySQL mode.
+- Made restart recovery honor persisted delivery attempt counts and transition exhausted online delivery to OFFLINE instead of retrying forever.
+- Added database-backed Delivery/Outbox backlog gauges and group fanout duration timing.
+- Changed ordinary-group Inbox writes to JDBC batches; group message/Inbox/Outbox rollback and concurrent sequence allocation now have transaction-level tests. Large-group reads use MySQL as the authoritative source when Redis projection is unavailable.
+- Added Flyway V4/V5: recipient-scoped `im_message` ACK timestamps and database-owned per-user offline cursor allocation. Redis is now only the offline ZSet projection, and concurrent duplicate message IDs reuse one durable cursor.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -46,12 +61,13 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - `HANDOFF.md`
 
 ## Database and messaging status
-- `im_message`, `outbox_event`, offline index, group, member, sequence, group-message, inbox, and member-cursor tables are defined in `schema.sql`, `script/init.sql`, and Flyway `V1__tim_core.sql`.
+- `im_message`, `outbox_event`, offline index/sequence, group, member, sequence, group-message, inbox, member-cursor, and delivery tables are defined in `schema.sql`, `script/init.sql`, and Flyway V1-V5 migrations.
 - `tim.mq.mode=rocketmq` uses a node-targeted RocketMQ topic and a separate `BROADCASTING` group topic so every active node receives group broadcasts; `local` remains the no-broker development fallback.
 - Redis route Hash is `tim:route:user:{userId}`; offline ZSet is `im:offline:{userId}` with messageId members and per-user delivery cursors.
 
 ## Validation
-- `./mvnw.cmd test`: latest run exited 0; surefire reports contain no non-zero failures/errors.
+- `./mvnw.cmd test`: latest run exited 0; 93 tests, 0 failures, 0 errors, 0 skipped.
+- `./mvnw.cmd verify`: latest run exited 0 after the Delivery lease, conditional ACK, database offline cursor, reliability metrics, and transactional group-fanout fixes (105 tests).
 - `docker compose config`: latest run exited 0.
 - `./mvnw.cmd -q verify -DskipTests`: latest run exited 0.
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=BeanConfigTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
@@ -68,17 +84,25 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - `docker compose config`: latest run exited 0 after correcting the container healthcheck command.
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
-- `docker info`: Docker Desktop Linux daemon was available during the latest attempt.
-- `scripts/smoke-test.ps1`: failed while building `tim-node-1`/`tim-node-2`; Docker could not fetch the Docker Hub OAuth token for `eclipse-temurin:17-jre-jammy` because the registry connection timed out.
-- No TIM container health check or two-node runtime result was claimed; the smoke script's cleanup left the Compose project stopped.
+- GitHub Actions `build-and-test` passed for commit `d365492` (run `34033585445`, job `101487506968`).
+- `docker info`: Docker Desktop 4.87.0 Linux daemon was available for the prior smoke run, but is currently unavailable. A clean application-process restart reproduces `sailor-ingest.sock: bind: Only one usage of each socket address ...`, before the engine/API pipe is created. No Docker data reset was attempted.
+- `scripts/smoke-test.ps1`: latest run passed with `TIM_MYSQL_PORT=13306`; both TIM nodes and all middleware became healthy, and the script's durable offline idempotency, cross-node group persistence, and persisted-message-after-node-restart assertions passed.
 
 ## Known blockers / boundaries
 - Existing working tree contains extensive user modifications; do not reset or discard them.
 - The current project is Java 17/Spring Boot 3, not Java 21.
-- Full runtime integration against Redis, MySQL, ZooKeeper, and RocketMQ remains unverified because the required base image could not be pulled from Docker Hub.
-- The focused/unit tests prove local routing, persistence orchestration, cursor semantics, retry/ACK behavior, and broadcast fanout; they do not replace the pending two-node middleware smoke test.
+- Real TCP client-to-client delivery, node-kill recovery, Redis/RocketMQ fault injection, and online RocketMQ broadcast consumption remain unverified.
+- The HTTP smoke assertions prove shared durable persistence paths, but do not replace the pending TCP/middleware failure scenarios.
+- The latest real-client attempt proved Gateway account registration after the validation fix, then exposed and fixed fresh-ZooKeeper parent creation plus the client reconnect-null bug. Docker stopped before the rebuilt nodes could be re-tested, so this is not TCP delivery evidence.
+- Current host-only blocker: Docker Desktop 4.87.0 crashes while binding its internal `sailor-ingest.sock`. Docker 4.89 release notes describe a Windows startup fix for a stuck socket left by an ungraceful shutdown. Updating Docker Desktop or rebooting Windows requires user authority; until then, Compose/TCP/fault-injection acceptance cannot resume on this host.
 
 ## Next actions
-1. In an environment with Docker Hub access or a locally cached `eclipse-temurin:17-jre-jammy`, run `./mvnw.cmd package` and `scripts/smoke-test.ps1`.
-2. Verify two-node RocketMQ private delivery, broadcast fanout, Redis route ownership, MySQL Flyway startup, and offline replay against the Compose stack.
-3. Do not claim the Docker smoke test passed until those runtime checks produce evidence.
+1. Run a real two-client Netty acceptance against the Compose nodes.
+2. Verify node-kill recovery, ACK loss/retry, Redis route loss, RocketMQ duplicate delivery, and concurrent group sequence behavior.
+3. Keep the current smoke result scoped to health, durable offline idempotency, and cross-node group persistence.
+
+## Enterprise reliability v2 continuation
+- Commits: `cf19271`, `f48832b`, `1313c7d`, `f38cd25`, `beb875f`, `0bf868a`, `1fee929`.
+- Latest full Maven test, verify, Compose config, and diff-check passed after these changes.
+- Added database conditional lease claiming/recovery for due `message_delivery` rows and persisted server-side offline ACK upper-bound state in migration `V3__offline_ack_cursor.sql`.
+- Latest runtime smoke passed with `TIM_MYSQL_PORT=13306`: all middleware health checks and both TIM `/actuator/health` endpoints passed. Full cross-node message/failure-injection scenarios remain to be exercised.

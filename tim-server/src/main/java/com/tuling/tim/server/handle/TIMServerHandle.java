@@ -15,6 +15,7 @@ import com.tuling.tim.server.route.RedisRouteService;
 import com.tuling.tim.server.message.ChatMessage;
 import com.tuling.tim.server.message.ReliableMessageService;
 import com.tuling.tim.server.group.GroupMessageService;
+import com.tuling.tim.common.security.ConnectToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
@@ -37,6 +38,10 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
     @Value("${tim.message.max-content-length:65536}")
     private int maxContentLength;
+    @Value("${tim.server.id:im-server-1}")
+    private String serverId;
+    @Value("${tim.connect-token.secret:}")
+    private String connectTokenSecret;
 
 
     /**
@@ -84,19 +89,36 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
             com.fasterxml.jackson.databind.JsonNode loginNode = mapper.readTree(msg.getReqMsg());
             String userName = loginNode.path("userName").asText(msg.getReqMsg());
             long offlineCursor = loginNode.path("offlineCursor").asLong(0L);
+            ConnectToken.Claims claims;
+            try {
+                claims = ConnectToken.verify(loginNode.path("connectToken").asText(null), serverId, connectTokenSecret, System.currentTimeMillis());
+            } catch (RuntimeException invalidToken) {
+                LOGGER.warn("rejecting invalid Netty login: {}", invalidToken.getMessage());
+                ctx.close();
+                return;
+            }
+            long userId = claims.userId();
             //保存客户端与 Channel 之间的关系
-            String[] session = SessionSocketHolder.put(msg.getRequestId(), ctx.channel()).split(":", 2);
-            SessionSocketHolder.saveSession(msg.getRequestId(), userName);
+            String[] session = SessionSocketHolder.put(userId, ctx.channel()).split(":", 2);
+            SessionSocketHolder.saveSession(userId, userName);
             SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
-                    { SpringBeanFactory.getBean(RedisRouteService.class).online(msg.getRequestId(), session[0], Long.parseLong(session[1]));
-                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(msg.getRequestId(), ctx.channel());
-                      SpringBeanFactory.getBean(ReliableMessageService.class).replayOffline(msg.getRequestId(), offlineCursor, ctx.channel()); });
-            LOGGER.info("client [{}] online success!!", msg.getReqMsg());
+                    { SpringBeanFactory.getBean(RedisRouteService.class).online(userId, session[0], Long.parseLong(session[1]));
+                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(userId, ctx.channel());
+                      SpringBeanFactory.getBean(ReliableMessageService.class).replayOffline(userId, offlineCursor, ctx.channel()); });
+            LOGGER.info("client [{}] online success!!", userId);
         }
 
         //心跳更新时间
         if (msg.getType() == Constants.CommandType.PING) {
             NettyAttrUtil.updateReaderTime(ctx.channel(), System.currentTimeMillis());
+            ConnectionSession session = SessionSocketHolder.getSession(ctx.channel());
+            if (session != null && isAuthenticated(session, ctx.channel())) {
+                SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() -> {
+                    boolean renewed = SpringBeanFactory.getBean(RedisRouteService.class)
+                            .renew(session.getUserId(), session.getSessionId(), session.getEpoch());
+                    if (!renewed) LOGGER.warn("route renewal rejected for user={}, session={}", session.getUserId(), session.getSessionId());
+                });
+            }
             //向客户端响应 pong 消息
             TIMReqMsg heartBeat = SpringBeanFactory.getBean("heartBeat",
                     TIMReqMsg.class);
@@ -125,11 +147,12 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
         if (msg.getType() == Constants.CommandType.ACK) {
             ConnectionSession session = SessionSocketHolder.getSession(ctx.channel());
+            if (!isAuthenticated(session, ctx.channel())) { ctx.close(); return; }
             SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() -> {
-                if (session != null && msg.getReqMsg() != null && msg.getReqMsg().startsWith("OFFLINE:")) {
+                if (msg.getReqMsg() != null && msg.getReqMsg().startsWith("OFFLINE:")) {
                     SpringBeanFactory.getBean(ReliableMessageService.class).acknowledgeOffline(session.getUserId(), Long.parseLong(msg.getReqMsg().substring("OFFLINE:".length())));
                 } else {
-                    SpringBeanFactory.getBean(ReliableMessageService.class).acknowledge(msg.getReqMsg());
+                    SpringBeanFactory.getBean(ReliableMessageService.class).acknowledge(msg.getReqMsg(), session == null ? -1L : session.getUserId());
                 }
             });
         }

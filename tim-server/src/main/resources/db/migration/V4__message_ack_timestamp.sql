@@ -1,0 +1,2 @@
+ALTER TABLE im_message
+  ADD COLUMN acked_at TIMESTAMP NULL;

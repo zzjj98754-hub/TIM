@@ -16,8 +16,8 @@ jobs:
           java-version: '17'
           cache: maven
       - name: Maven test
-        run: ./mvnw -q test
+        run: bash mvnw -q test
       - name: Maven verify
-        run: ./mvnw -q verify -DskipTests
+        run: bash mvnw -q verify -DskipTests
       - name: Validate Compose model
         run: docker compose config

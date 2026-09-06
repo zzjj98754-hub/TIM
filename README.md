@@ -61,6 +61,10 @@ docker compose up -d --build
 - `tim-gateway` HTTP: `8090`
 - `tim-client` HTTP: `8003`
 
+如果宿主机 3306 已被占用，可将 MySQL 发布端口改为备用端口，例如
+PowerShell 中设置 `$env:TIM_MYSQL_PORT='13306'`；Compose 内部连接仍使用
+`mysql:3306`。
+
 ### 本地运行
 
 如果需要本地调试单个模块，先确保 Redis、MySQL、ZooKeeper 和 RocketMQ 可用，再按以下顺序启动：
@@ -213,5 +217,5 @@ Gateway 的 `/p2pRoute` 和 `/groupRoute` 仅保留为明确返回弃用提示�
 
 先执行 `./mvnw.cmd package`，再执行 `scripts/smoke-test.ps1`（Linux 使用
 `bash scripts/smoke-test.sh`）。Smoke脚本会检查Compose服务、构建两个TIM节点并
-访问 `/actuator/health`。如果Docker daemon未启动，只能执行 `docker compose config`
+访问 `/actuator/health`，并验证离线消息幂等和跨节点群消息持久化读取。如果Docker daemon未启动，只能执行 `docker compose config`
 和 Maven 测试，不能宣称容器验收通过。

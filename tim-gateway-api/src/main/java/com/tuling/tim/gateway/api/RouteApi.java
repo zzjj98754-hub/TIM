@@ -6,6 +6,7 @@ import com.tuling.tim.gateway.api.vo.req.LoginReqVO;
 import com.tuling.tim.gateway.api.vo.req.P2PReqVO;
 import com.tuling.tim.gateway.api.vo.req.RegisterInfoReqVO;
 import com.tuling.tim.gateway.api.vo.res.RegisterInfoResVO;
+import jakarta.validation.Valid;
 
 /**
  * Route Api
@@ -21,7 +22,7 @@ public interface RouteApi {
      * @return
      * @throws Exception
      */
-    Object groupRoute(ChatReqVO groupReqVO) throws Exception;
+    Object groupRoute(@Valid ChatReqVO groupReqVO) throws Exception;
 
     /**
      * Point to point chat
@@ -30,7 +31,7 @@ public interface RouteApi {
      * @return
      * @throws Exception
      */
-    Object p2pRoute(P2PReqVO p2pRequest) throws Exception;
+    Object p2pRoute(@Valid P2PReqVO p2pRequest) throws Exception;
 
 
     /**
@@ -40,7 +41,7 @@ public interface RouteApi {
      * @return
      * @throws Exception
      */
-    Object offLine(ChatReqVO groupReqVO) throws Exception;
+    Object offLine(@Valid ChatReqVO groupReqVO) throws Exception;
 
     /**
      * Login account
@@ -49,7 +50,7 @@ public interface RouteApi {
      * @return
      * @throws Exception
      */
-    Object login(LoginReqVO loginReqVO) throws Exception;
+    Object login(@Valid LoginReqVO loginReqVO) throws Exception;
 
     /**
      * Register account
@@ -58,7 +59,7 @@ public interface RouteApi {
      * @return
      * @throws Exception
      */
-    BaseResponse<RegisterInfoResVO> registerAccount(RegisterInfoReqVO registerInfoReqVO) throws Exception;
+    BaseResponse<RegisterInfoResVO> registerAccount(@Valid RegisterInfoReqVO registerInfoReqVO) throws Exception;
 
     /**
      * Get all online users

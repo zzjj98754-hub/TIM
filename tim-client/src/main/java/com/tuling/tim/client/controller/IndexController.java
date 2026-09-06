@@ -4,6 +4,7 @@ import com.tuling.tim.client.client.TIMClient;
 import com.tuling.tim.client.service.RouteRequest;
 import com.tuling.tim.client.vo.req.GoogleProtocolVO;
 import com.tuling.tim.client.vo.req.GroupReqVO;
+import com.tuling.tim.client.vo.req.P2PReqVO;
 import com.tuling.tim.client.vo.req.SendMsgReqVO;
 import com.tuling.tim.client.vo.req.StringReqVO;
 import com.tuling.tim.client.vo.res.SendMsgResVO;
@@ -91,6 +92,17 @@ public class IndexController {
         GroupReqVO groupReqVO = new GroupReqVO(sendMsgReqVO.getUserId(), sendMsgReqVO.getMsg());
         routeRequest.sendGroupMsg(groupReqVO);
 
+        res.setCode(StatusEnum.SUCCESS.getCode());
+        res.setMessage(StatusEnum.SUCCESS.getMessage());
+        return res;
+    }
+
+    /** Sends a P2P message through this client's authenticated Netty channel. */
+    @RequestMapping(value = "sendChat", method = RequestMethod.POST)
+    @ResponseBody
+    public BaseResponse<NULLBody> sendChat(@RequestBody P2PReqVO request) {
+        heartbeatClient.sendChat(request.getReceiveUserId(), request.getMsg());
+        BaseResponse<NULLBody> res = new BaseResponse<>();
         res.setCode(StatusEnum.SUCCESS.getCode());
         res.setMessage(StatusEnum.SUCCESS.getMessage());
         return res;

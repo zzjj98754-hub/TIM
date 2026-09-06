@@ -27,7 +27,7 @@ services:
       - tim_zookeeper_data:/data
       - tim_zookeeper_datalog:/datalog
     healthcheck:
-      test: ["CMD-SHELL", "printf ruok | nc -w 2 127.0.0.1 2181 | grep -q imok"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/2181'"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -37,7 +37,7 @@ services:
     image: mysql:8.4
     container_name: tim-mysql
     ports:
-      - "3306:3306"
+      - "${TIM_MYSQL_PORT:-3306}:3306"
     environment:
       MYSQL_DATABASE: tim
       MYSQL_USER: tim
@@ -45,7 +45,6 @@ services:
       MYSQL_ROOT_PASSWORD: root
     volumes:
       - tim_mysql_data:/var/lib/mysql
-      - ./script/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -proot --silent"]
       interval: 10s
@@ -60,7 +59,7 @@ services:
       - "9876:9876"
     command: sh mqnamesrv
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 9876"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9876'"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -77,7 +76,7 @@ services:
       - "10911:10911"
     command: sh mqbroker
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 10911"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/10911'"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -108,6 +107,7 @@ services:
       TIM_MYSQL_USER: tim
       TIM_MYSQL_PASSWORD: tim
       TIM_FLYWAY_ENABLED: "true"
+      TIM_SQL_INIT_MODE: "never"
       TIM_MQ_MODE: rocketmq
       TIM_ROCKETMQ_NAMESRV: rocketmq-namesrv:9876
     ports:
@@ -144,6 +144,7 @@ services:
       TIM_MYSQL_USER: tim
       TIM_MYSQL_PASSWORD: tim
       TIM_FLYWAY_ENABLED: "true"
+      TIM_SQL_INIT_MODE: "never"
       TIM_MQ_MODE: rocketmq
       TIM_ROCKETMQ_NAMESRV: rocketmq-namesrv:9876
     ports:

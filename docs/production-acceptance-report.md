@@ -6,17 +6,18 @@
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=TIMServerHandleTest -Dsurefire.failIfNoSpecifiedTests=false test`：通过。
 - `docker compose config`：通过，包含 MySQL、Redis、ZooKeeper、RocketMQ NameServer、RocketMQ Broker、`tim-node-1`、`tim-node-2`。
 - `git diff --check`：通过。
+- `TIM_MYSQL_PORT=13306 ./scripts/smoke-test.ps1`：通过；双 TIM 节点和 Redis、MySQL、ZooKeeper、RocketMQ NameServer/Broker 健康检查均通过，两个 `/actuator/health` 均返回成功。
 
 ## 运行态边界
 
-最新尝试中 Docker Linux daemon 可用，但构建 TIM 节点时无法从 Docker Hub 获取 `eclipse-temurin:17-jre-jammy` 的 OAuth token，故没有将双节点启动、Actuator、Redis、MySQL、ZooKeeper、RocketMQ、跨节点私聊或群广播写成“已通过”。在具备镜像访问或预拉取镜像的环境执行：
+基础 Compose 启动、健康检查、Flyway、离线幂等、跨节点群消息持久化读取以及“节点 1 停止/重启后仍可读取已持久化消息”已通过。烟测使用 `TIM_MYSQL_PORT=13306` 避开宿主机 3306 占用；仍未将真实 TCP 双客户端私聊、群广播在线消费、未 ACK 投递租约恢复写成已通过：
 
 ```powershell
 ./scripts/smoke-test.ps1
 ```
 
-该脚本会启动 Compose、检查两个节点的 `/actuator/health`，结束时关闭 Compose。中间件级跨节点消息、离线重连和故障恢复仍需在脚本基础上继续做端到端验证。
+该脚本会启动 Compose、检查两个节点的 `/actuator/health`，通过 HTTP demo 接口验证共享 MySQL 的离线幂等和群持久化读取，结束时关闭 Compose。TCP 在线投递、离线重连和故障恢复仍需继续做端到端验证。
 
 ## 当前结论
 
-核心代码链路和自动化单元测试已落地，配置与文档已对齐；最终的多节点运行态验收受 Docker Hub 镜像访问阻塞，不能替代性宣称完成。
+核心代码链路、自动化测试和基础 Compose 运行态已验证；跨节点业务故障注入仍需补充专用验收脚本。

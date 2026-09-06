@@ -6,7 +6,8 @@ package com.tuling.tim.client.thread;
  * @since JDK 1.8
  */
 public class ContextHolder {
-    private static final ThreadLocal<Boolean> IS_RECONNECT = new ThreadLocal<>() ;
+    private static final ThreadLocal<Boolean> IS_RECONNECT =
+            ThreadLocal.withInitial(() -> false) ;
 
     public static void setReconnect(boolean reconnect){
         IS_RECONNECT.set(reconnect);

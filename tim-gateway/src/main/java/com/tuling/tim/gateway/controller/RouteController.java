@@ -19,6 +19,7 @@ import com.tuling.tim.gateway.cache.ServerCache;
 import com.tuling.tim.gateway.service.AccountService;
 import com.tuling.tim.gateway.service.CommonBizService;
 import com.tuling.tim.gateway.service.UserInfoCacheService;
+import com.tuling.tim.common.security.ConnectToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 
 import jakarta.validation.Valid;
 
@@ -57,6 +59,11 @@ public class RouteController implements RouteApi {
 
     @Autowired
     private RouteHandle routeHandle;
+
+    @Value("${tim.connect-token.secret:}")
+    private String connectTokenSecret;
+    @Value("${tim.connect-token.ttl-ms:60000}")
+    private long connectTokenTtlMs;
 
     /**
      * 群聊 API
@@ -139,6 +146,9 @@ public class RouteController implements RouteApi {
             commonBizService.checkServerAvailable(routeInfo);
 
             TIMServerResVO vo = new TIMServerResVO(routeInfo);
+            String serverId = serverCache.serverIdForRoute(server);
+            vo.setServerId(serverId);
+            vo.setConnectToken(ConnectToken.issue(loginReqVO.getUserId(), serverId, connectTokenTtlMs, connectTokenSecret));
             res.setDataBody(vo);
 
         }

@@ -7,6 +7,7 @@ public class ChatMessage {
     private long fromUserId;
     private long toUserId;
     private long groupId;
+    private long groupSequence;
     private String content;
     private long createdAt;
 
@@ -20,6 +21,8 @@ public class ChatMessage {
     public void setToUserId(long toUserId) { this.toUserId = toUserId; }
     public long getGroupId() { return groupId; }
     public void setGroupId(long groupId) { this.groupId = groupId; }
+    public long getGroupSequence() { return groupSequence; }
+    public void setGroupSequence(long groupSequence) { this.groupSequence = groupSequence; }
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
     public long getCreatedAt() { return createdAt; }
