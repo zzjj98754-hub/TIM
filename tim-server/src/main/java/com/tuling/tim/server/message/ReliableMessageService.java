@@ -139,7 +139,7 @@ public class ReliableMessageService {
         try {
             String key = "im:offline:" + message.getToUserId();
             Long existingCursor = history.findOfflineCursor(message.getToUserId(), message.getMessageId());
-            if (existingCursor != null) {
+            if (existingCursor != null && existingCursor > 0L) {
                 redis.opsForZSet().add(key, message.getMessageId(), existingCursor.doubleValue());
                 redis.expire(key, Duration.ofDays(7));
                 if (deliveries != null) deliveries.markOffline(message.getMessageId(), message.getToUserId());
