@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import java.time.Duration;
 
@@ -23,6 +24,7 @@ public class RedisRouteService {
     private final StringRedisTemplate redis;
     private final String serverId;
     private final String routeInfo;
+    private MeterRegistry metrics;
 
     public RedisRouteService(StringRedisTemplate redis, @Value("${tim.server.id:im-server-1}") String serverId,
                              @Value("${tim.server.host:127.0.0.1}") String host,
@@ -30,6 +32,8 @@ public class RedisRouteService {
                              @Value("${server.port:8082}") int httpPort) {
         this.redis = redis; this.serverId = serverId; this.routeInfo = host + ":" + tcpPort + ":" + httpPort;
     }
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMetrics(MeterRegistry metrics) { this.metrics = metrics; }
     public void online(long userId, String sessionId, long epoch) {
         long ttlSeconds = Duration.ofHours(24).getSeconds();
         redis.execute(ONLINE_SCRIPT, java.util.List.of(routeKey(userId), presenceKey(userId)),
@@ -43,7 +47,9 @@ public class RedisRouteService {
         long ttlSeconds = Duration.ofHours(24).getSeconds();
         Long result = redis.execute(RENEW_SCRIPT, java.util.List.of(routeKey(userId), presenceKey(userId)),
                 serverId, sessionId, String.valueOf(epoch), String.valueOf(ttlSeconds));
-        return Long.valueOf(1L).equals(result);
+        boolean renewed = Long.valueOf(1L).equals(result);
+        if (metrics != null) metrics.counter("tim_route_renew_total", "result", renewed ? "success" : "session_mismatch").increment();
+        return renewed;
     }
     public String findServer(long userId) { return (String) redis.opsForHash().get(routeKey(userId), "nodeId"); }
     public String serverId() { return serverId; }
