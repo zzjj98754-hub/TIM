@@ -111,6 +111,14 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
         //心跳更新时间
         if (msg.getType() == Constants.CommandType.PING) {
             NettyAttrUtil.updateReaderTime(ctx.channel(), System.currentTimeMillis());
+            ConnectionSession session = SessionSocketHolder.getSession(ctx.channel());
+            if (session != null && isAuthenticated(session, ctx.channel())) {
+                SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() -> {
+                    boolean renewed = SpringBeanFactory.getBean(RedisRouteService.class)
+                            .renew(session.getUserId(), session.getSessionId(), session.getEpoch());
+                    if (!renewed) LOGGER.warn("route renewal rejected for user={}, session={}", session.getUserId(), session.getSessionId());
+                });
+            }
             //向客户端响应 pong 消息
             TIMReqMsg heartBeat = SpringBeanFactory.getBean("heartBeat",
                     TIMReqMsg.class);
