@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -43,6 +44,7 @@ public class ReliableMessageService {
     private final int outboxMaxRetries;
     private final String deliveryWorkerId = UUID.randomUUID().toString();
     private final int offlineLimit;
+    private MeterRegistry metrics;
 
     public ReliableMessageService(RedisRouteService routes, StringRedisTemplate redis, MessageHistoryRepository history,
                                   ObjectMapper json, SnowflakeIdGenerator ids, OutboxRepository outbox,
@@ -63,6 +65,12 @@ public class ReliableMessageService {
     }
     @org.springframework.beans.factory.annotation.Autowired
     void setBus(@Lazy NodeMessageBus bus) { this.bus = bus; }
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMetrics(MeterRegistry metrics) {
+        this.metrics = metrics;
+        io.micrometer.core.instrument.Gauge.builder("tim_delivery_pending", pending, Map::size).register(metrics);
+    }
+    private void count(String name) { if (metrics != null) metrics.counter(name).increment(); }
 
     @Transactional
     public void accept(ChatMessage message) {
@@ -71,6 +79,7 @@ public class ReliableMessageService {
         if (message.getClientMessageId() == null || message.getClientMessageId().isBlank()) message.setClientMessageId(message.getMessageId());
         boolean inserted = history.insertIfAbsent(message, "PENDING");
         if (!inserted) return;
+        count("tim_message_accept_total");
         if (deliveries != null) deliveries.createPending(message);
         outbox.append(message);
         Runnable cacheDedup = () -> {
@@ -121,6 +130,7 @@ public class ReliableMessageService {
         pending.remove(messageId);
         if (deliveries == null || recipientId <= 0 || deliveries.acknowledge(messageId, recipientId)) {
             history.updateStatus(messageId, "ACKED");
+            count("tim_message_ack_total");
         }
     }
     @Scheduled(fixedDelayString = "${tim.delivery.scan-ms:1000}")
@@ -128,8 +138,9 @@ public class ReliableMessageService {
         long now = System.currentTimeMillis();
         pending.forEach((id, delivery) -> {
             if (delivery.getNextRetryAt() > now) return;
-            if (delivery.getAttempts() >= maxRetries) { pending.remove(id); if (deliveries != null) deliveries.markOffline(delivery.getMessage().getMessageId(), delivery.getMessage().getToUserId()); saveOffline(delivery.getMessage(), "retry exhausted"); return; }
+            if (delivery.getAttempts() >= maxRetries) { pending.remove(id); count("tim_message_dead_total"); if (deliveries != null) deliveries.markOffline(delivery.getMessage().getMessageId(), delivery.getMessage().getToUserId()); saveOffline(delivery.getMessage(), "retry exhausted"); return; }
             delivery.incrementAttempts(now + retryMs);
+            count("tim_message_retry_total");
             dispatch(delivery.getMessage());
         });
         if (deliveries != null) {
@@ -153,6 +164,7 @@ public class ReliableMessageService {
         }
     }
     public void saveOffline(ChatMessage message, String reason) {
+        count("tim_message_offline_total");
         try {
             String key = "im:offline:" + message.getToUserId();
             Long existingCursor = history.findOfflineCursor(message.getToUserId(), message.getMessageId());
