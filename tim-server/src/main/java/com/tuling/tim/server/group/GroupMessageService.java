@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Set;
 import com.tuling.tim.server.util.SessionSocketHolder;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Small groups write-diffuse; large groups append once and are read by member cursor. */
 @Service
@@ -38,29 +40,55 @@ public class GroupMessageService {
         jdbc.queryForList("SELECT group_id FROM group_member WHERE user_id=?", Long.class, userId)
                 .forEach(groupId -> SessionSocketHolder.joinGroup(groupId, channel));
     }
+    public void removeMember(long groupId, long userId) {
+        jdbc.update("DELETE FROM group_member WHERE group_id=? AND user_id=?", groupId, userId);
+        redis.opsForSet().remove(membersKey(groupId), String.valueOf(userId));
+        NioSocketChannel channel = SessionSocketHolder.get(userId);
+        if (channel != null) SessionSocketHolder.leaveGroup(groupId, channel);
+    }
     public String send(ChatMessage source) {
         Set<String> members = redis.opsForSet().members(membersKey(source.getGroupId()));
         if (members == null || !members.contains(String.valueOf(source.getFromUserId()))) throw new IllegalArgumentException("sender is not a group member");
         String messageId = source.getMessageId() == null ? String.valueOf(System.currentTimeMillis()) : source.getMessageId();
         source.setMessageId(messageId);
-        jdbc.update("INSERT INTO group_message (message_id, group_id, sender_id, content, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", messageId, source.getGroupId(), source.getFromUserId(), source.getContent());
+        long sequence = nextSequence(source.getGroupId());
+        jdbc.update("INSERT INTO group_message (message_id, group_id, group_sequence, sender_id, content, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", messageId, source.getGroupId(), sequence, source.getFromUserId(), source.getContent());
         if (members.size() < writeFanoutLimit) {
             for (String member : members) jdbc.update("INSERT INTO group_message_inbox (group_id, user_id, message_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", source.getGroupId(), Long.parseLong(member), messageId);
             bus.broadcastGroup(source);
             return "WRITE_FANOUT";
         }
         try {
-            redis.opsForZSet().add("im:group:messages:" + source.getGroupId(), messageId, source.getCreatedAt());
+            redis.opsForZSet().add("im:group:messages:" + source.getGroupId(), messageId, sequence);
             bus.broadcastGroup(source);
             return "READ_FANOUT";
         } catch (Exception e) { throw new IllegalStateException("store group message", e); }
     }
     public List<String> pull(long groupId, long userId, long cursor, int limit) {
-        List<String> values = new ArrayList<>(redis.opsForZSet().rangeByScore("im:group:messages:" + groupId, cursor + 1, Double.MAX_VALUE, 0, limit));
         if (!Boolean.TRUE.equals(redis.opsForSet().isMember(membersKey(groupId), String.valueOf(userId)))) throw new IllegalArgumentException("user is not a group member");
-        if (values.isEmpty()) values = jdbc.queryForList("SELECT message_id FROM group_message_inbox WHERE group_id=? AND user_id=? ORDER BY created_at LIMIT ?", String.class, groupId, userId, limit);
-        if (!values.isEmpty()) redis.opsForValue().set("im:group:cursor:" + groupId + ":" + userId, values.get(values.size() - 1));
-        return values;
+        List<String> ids = new ArrayList<>(redis.opsForZSet().rangeByScore("im:group:messages:" + groupId, cursor + 1, Double.MAX_VALUE, 0, limit));
+        if (ids.isEmpty()) ids = jdbc.queryForList("SELECT gm.message_id FROM group_message_inbox i JOIN group_message gm ON gm.message_id=i.message_id WHERE i.group_id=? AND i.user_id=? AND gm.group_sequence>? ORDER BY gm.group_sequence LIMIT ?", String.class, groupId, userId, cursor, limit);
+        List<String> bodies = loadBodies(ids, groupId);
+        return bodies;
+    }
+    private synchronized long nextSequence(long groupId) {
+        jdbc.update("INSERT INTO group_sequence (group_id, next_sequence) VALUES (?, 1) ON DUPLICATE KEY UPDATE group_id=group_id", groupId);
+        jdbc.update("UPDATE group_sequence SET next_sequence=next_sequence+1 WHERE group_id=?", groupId);
+        Long value = jdbc.queryForObject("SELECT next_sequence FROM group_sequence WHERE group_id=?", Long.class, groupId);
+        return value == null ? 1L : value;
+    }
+    private List<String> loadBodies(List<String> ids, long groupId) {
+        List<String> bodies = new ArrayList<>();
+        for (String id : ids) {
+            Map<String, Object> row = jdbc.queryForMap("SELECT sender_id, content, group_sequence, created_at FROM group_message WHERE group_id=? AND message_id=?", groupId, id);
+            try {
+                Map<String, Object> body = new HashMap<>(); body.put("messageId", id); body.put("groupId", groupId);
+                body.put("fromUserId", row.get("sender_id")); body.put("content", row.get("content"));
+                body.put("groupSequence", row.get("group_sequence")); body.put("createdAt", row.get("created_at"));
+                bodies.add(json.writeValueAsString(body));
+            } catch (Exception e) { throw new IllegalStateException("serialize group message", e); }
+        }
+        return bodies;
     }
     private String membersKey(long id) { return "im:group:members:" + id; }
     private ChatMessage copy(ChatMessage source) {

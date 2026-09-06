@@ -1,22 +1,16 @@
 package com.tuling.tim.server.kit;
 
 import com.tuling.tim.common.pojo.TIMUserInfo;
-import com.tuling.tim.common.util.JsonHttpClient;
-import com.tuling.tim.gateway.api.vo.req.ChatReqVO;
-import com.tuling.tim.server.config.AppConfiguration;
 import com.tuling.tim.server.util.SessionSocketHolder;
 import com.tuling.tim.server.route.RedisRouteService;
 import com.tuling.tim.server.util.SpringBeanFactory;
 import com.tuling.tim.server.util.ConnectionSession;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import okhttp3.OkHttpClient;
-import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 
 /**
  * @since JDK 1.8
@@ -25,12 +19,6 @@ import java.io.IOException;
 public class RouteHandler {
     private final static Logger LOGGER = LoggerFactory.getLogger(RouteHandler.class);
 
-    @Autowired
-    private OkHttpClient okHttpClient;
-
-    @Autowired
-    private AppConfiguration configuration;
-
     /**
      * 用户下线
      *
@@ -38,43 +26,15 @@ public class RouteHandler {
      * @param channel
      * @throws IOException
      */
-    public void userOffLine(TIMUserInfo userInfo, NioSocketChannel channel) throws IOException {
+    public void userOffLine(TIMUserInfo userInfo, NioSocketChannel channel) {
         if (userInfo != null) {
             LOGGER.info("Account [{}] offline", userInfo.getUserName());
             ConnectionSession session = SessionSocketHolder.getSession(channel);
             SessionSocketHolder.removeSession(userInfo.getUserId());
             if (session != null) SpringBeanFactory.getBean(RedisRouteService.class)
                     .offline(userInfo.getUserId(), session.getSessionId(), session.getEpoch());
-            //清除路由关系
-            clearRouteInfo(userInfo);
         }
         SessionSocketHolder.remove(channel);
 
     }
-
-
-    /**
-     * 清除路由关系
-     *
-     * @param userInfo
-     * @throws IOException
-     */
-    public void clearRouteInfo(TIMUserInfo userInfo) {
-        Response response = null;
-        ChatReqVO vo = new ChatReqVO(userInfo.getUserId(), userInfo.getUserName());
-        try {
-            response = JsonHttpClient.post(okHttpClient, configuration.getGatewayUrl(), "/offLine", vo);
-            if (response == null || !response.isSuccessful()) {
-                throw new IOException("offline request failed");
-            }
-        } catch (Exception e) {
-            LOGGER.error("Exception", e);
-            throw new IllegalStateException("clear route info failed", e);
-        } finally {
-            if (response != null && response.body() != null) {
-                response.body().close();
-            }
-        }
-    }
-
 }

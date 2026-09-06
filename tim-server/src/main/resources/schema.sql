@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS outbox_event (
 );
 CREATE TABLE IF NOT EXISTS im_group (group_id BIGINT PRIMARY KEY, name VARCHAR(128) NOT NULL, created_at TIMESTAMP NOT NULL);
 CREATE TABLE IF NOT EXISTS group_member (group_id BIGINT NOT NULL, user_id BIGINT NOT NULL, joined_at TIMESTAMP NOT NULL, PRIMARY KEY(group_id, user_id));
-CREATE TABLE IF NOT EXISTS group_message (message_id VARCHAR(64) PRIMARY KEY, group_id BIGINT NOT NULL, sender_id BIGINT NOT NULL, content TEXT NOT NULL, created_at TIMESTAMP NOT NULL);
+CREATE TABLE IF NOT EXISTS group_sequence (group_id BIGINT PRIMARY KEY, next_sequence BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS group_message (message_id VARCHAR(64) PRIMARY KEY, group_id BIGINT NOT NULL, group_sequence BIGINT NOT NULL, sender_id BIGINT NOT NULL, content TEXT NOT NULL, created_at TIMESTAMP NOT NULL, UNIQUE(group_id, group_sequence));
 CREATE TABLE IF NOT EXISTS group_message_inbox (group_id BIGINT NOT NULL, user_id BIGINT NOT NULL, message_id VARCHAR(64) NOT NULL, created_at TIMESTAMP NOT NULL, PRIMARY KEY(group_id, user_id, message_id));
 CREATE TABLE IF NOT EXISTS group_member_cursor (group_id BIGINT NOT NULL, user_id BIGINT NOT NULL, last_read_sequence BIGINT NOT NULL DEFAULT 0, PRIMARY KEY(group_id, user_id));
 CREATE TABLE IF NOT EXISTS offline_message_index (user_id BIGINT NOT NULL, delivery_cursor BIGINT NOT NULL, message_id VARCHAR(64) NOT NULL, PRIMARY KEY(user_id, delivery_cursor), UNIQUE(user_id, message_id));
