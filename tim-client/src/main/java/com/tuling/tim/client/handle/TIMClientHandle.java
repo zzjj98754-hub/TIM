@@ -3,6 +3,7 @@ package com.tuling.tim.client.handle;
 import com.tuling.tim.client.service.EchoService;
 import com.tuling.tim.client.service.ReConnectManager;
 import com.tuling.tim.client.service.OfflineCursorStore;
+import com.tuling.tim.client.service.MessageDeduplicator;
 import com.tuling.tim.client.service.ShutDownMsg;
 import com.tuling.tim.client.service.impl.EchoServiceImpl;
 import com.tuling.tim.client.util.SpringBeanFactory;
@@ -20,6 +21,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * @since JDK 1.8
@@ -41,6 +44,8 @@ public class TIMClientHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
     private EchoService echoService;
 
     private OfflineCursorStore offlineCursorStore;
+
+    private MessageDeduplicator deduplicator;
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
@@ -101,15 +106,30 @@ public class TIMClientHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
         }
 
         if (msg.getType() != Constants.CommandType.PING) {
-            //回调消息
-            callBackMsg(msg.getReqMsg(), msg.getType() == Constants.CommandType.CHAT
-                    ? () -> acknowledgeAfterHandling(ctx, msg.getReqMsg()) : () -> { });
-
-            //将消息中的 emoji 表情格式化为 Unicode 编码以便在终端可以显示
-            String response = EmojiParser.parseToUnicode(msg.getReqMsg());
-            echoService.echo(response);
+            if (deduplicator == null) deduplicator = SpringBeanFactory.getBean(MessageDeduplicator.class);
+            String messageId = messageId(msg.getReqMsg());
+            if (!deduplicator.firstDelivery(messageId)) {
+                if (msg.getType() == Constants.CommandType.CHAT) acknowledgeAfterHandling(ctx, msg.getReqMsg());
+                return;
+            }
+            callBackMsg(msg.getReqMsg(), () -> {
+                // Echo and ACK only after the application callback succeeds.
+                echoService.echo(EmojiParser.parseToUnicode(msg.getReqMsg()));
+                if (msg.getType() == Constants.CommandType.CHAT) acknowledgeAfterHandling(ctx, msg.getReqMsg());
+            });
         }
 
+    }
+
+    private String messageId(String payload) {
+        try {
+            JsonNode node = new ObjectMapper().readTree(payload);
+            String id = node.path("messageId").asText();
+            if (!id.isBlank()) return id;
+            return node.path("clientMessageId").asText();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     /**

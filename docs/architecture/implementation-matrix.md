@@ -8,6 +8,7 @@
 | Redis 用户路由 | IMPLEMENTED | Gateway 登录只返回候选节点；仅已认证 Netty Session 通过 Lua 原子写入 route Hash/TTL/presence，断开按 session/epoch 原子匹配删除 |
 | 单聊可靠投递 | IMPLEMENTED | `ReliableMessageService`、MySQL `im_message/outbox_event`、RocketMQ node topic、目标节点本地 Channel、ACK/重试 |
 | Outbox 并发 Relay | IMPLEMENTED | `OutboxRepository.claimPending` 使用短租约 `PROCESSING`；过期重试，超限进入 `DEAD` |
+| 客户端重复投递去重 | IMPLEMENTED | `MessageDeduplicator` 有界按 messageId/clientMessageId 去重；首次回调成功后 ACK，重复帧只 ACK |
 | 服务端幂等 | IMPLEMENTED | Redis 快速去重 + MySQL `message_id` 与 `(from_user_id, client_message_id)` 唯一约束 |
 | 离线消息 | IMPLEMENTED | MySQL 正文/索引 + `im:offline:{userId}` ZSet；游标分页、ACK 后推进、容量/TTL、MySQL 回退 |
 | 普通群写扩散 | IMPLEMENTED | `WriteFanoutStrategy`, `group_message_inbox`；成员索引唯一，正文不按成员复制 |
