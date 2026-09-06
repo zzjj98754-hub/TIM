@@ -5,7 +5,7 @@
 | Netty自定义协议、粘包半包 | `tim-common/.../ObjEncoder.java`、`ObjDecoder.java`、`TIMFrameCodecTest.java` |
 | 认证Channel与旧连接保护 | `tim-server/.../TIMServerHandle.java`、`SessionSocketHolder.java`、`ConnectionSession.java` |
 | ZooKeeper注册发现 | `RegistryZK.java`、`ZKit.java`、Gateway `ZKit.java` |
-| 统一Redis路由 | `RedisRouteService.java`、Gateway `AccountServiceRedisImpl.java`，Key为 `tim:route:user:{id}` |
+| 统一Redis路由 | `RedisRouteService.java`、Gateway `AccountServiceRedisImpl.java`，Key为 `tim:route:user:{id}`；Lua 原子维护 route/presence 与 session/epoch 清理 |
 | 幂等与可靠投递 | `MessageHistoryRepository.java`、`OutboxRepository.java`、`ReliableMessageService.java` |
 | 离线消息 | `offline_message_index`、`tim:offline:{userId}`，正文由 `im_message` 保存 |
 | 群写/读扩散 | `GroupMessageService.java`、`im_group`、`group_message_inbox`、`group_member_cursor` |

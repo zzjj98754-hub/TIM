@@ -25,6 +25,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - Replaced `CallerRunsPolicy` with an instrumented bounded-queue rejection policy so blocking work is not run on a Netty caller thread; exposed executor gauges and rejection counter through Micrometer.
 - Added Outbox Relay short leases (`PROCESSING`), expired-lease reclaim, and configurable `DEAD` transition after retry exhaustion.
 - Removed Gateway's pre-auth `pending/gateway-login` route write; only the authenticated Netty session now owns the unified Redis route lifecycle.
+- Made route Hash, TTL, presence, and session/epoch conditional cleanup atomic with Redis Lua scripts.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`

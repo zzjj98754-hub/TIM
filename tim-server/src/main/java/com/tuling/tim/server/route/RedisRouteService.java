@@ -2,15 +2,21 @@ package com.tuling.tim.server.route;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.Collections;
-import java.util.Objects;
 
 /** The one routing source of truth for the demo: Redis user -> IM node. */
 @Service
 public class RedisRouteService {
+    private static final DefaultRedisScript<Long> ONLINE_SCRIPT = new DefaultRedisScript<>(
+            "redis.call('HSET', KEYS[1], 'nodeId', ARGV[1], 'sessionId', ARGV[2], 'epoch', ARGV[3], 'route', ARGV[4]); " +
+                    "redis.call('EXPIRE', KEYS[1], ARGV[5]); " +
+                    "redis.call('SET', KEYS[2], '1', 'EX', ARGV[5]); return 1", Long.class);
+    private static final DefaultRedisScript<Long> OFFLINE_SCRIPT = new DefaultRedisScript<>(
+            "if redis.call('HGET', KEYS[1], 'sessionId') == ARGV[1] and redis.call('HGET', KEYS[1], 'epoch') == ARGV[2] then " +
+                    "redis.call('DEL', KEYS[1], KEYS[2]); return 1 else return 0 end", Long.class);
     private final StringRedisTemplate redis;
     private final String serverId;
     private final String routeInfo;
@@ -22,28 +28,17 @@ public class RedisRouteService {
         this.redis = redis; this.serverId = serverId; this.routeInfo = host + ":" + tcpPort + ":" + httpPort;
     }
     public void online(long userId, String sessionId, long epoch) {
-        String key = routeKey(userId);
-        redis.opsForHash().putAll(key, MapBuilder.of("nodeId", serverId, "sessionId", sessionId, "epoch", String.valueOf(epoch), "route", routeInfo));
-        redis.expire(key, Duration.ofHours(24));
-        redis.opsForValue().set("tim:presence:user:" + userId, "1", Duration.ofHours(24));
+        long ttlSeconds = Duration.ofHours(24).getSeconds();
+        redis.execute(ONLINE_SCRIPT, java.util.List.of(routeKey(userId), presenceKey(userId)),
+                serverId, sessionId, String.valueOf(epoch), routeInfo, String.valueOf(ttlSeconds));
     }
     public void offline(long userId, String sessionId, long epoch) {
-        String key = routeKey(userId);
-        String currentSession = (String) redis.opsForHash().get(key, "sessionId");
-        String currentEpoch = (String) redis.opsForHash().get(key, "epoch");
-        if (Objects.equals(sessionId, currentSession) && Objects.equals(String.valueOf(epoch), currentEpoch)) {
-            redis.delete(key);
-            redis.delete("tim:presence:user:" + userId);
-        }
+        redis.execute(OFFLINE_SCRIPT, java.util.List.of(routeKey(userId), presenceKey(userId)),
+                sessionId, String.valueOf(epoch));
     }
     public String findServer(long userId) { return (String) redis.opsForHash().get(routeKey(userId), "nodeId"); }
     public String serverId() { return serverId; }
     private String routeKey(long userId) { return "tim:route:user:" + userId; }
+    private String presenceKey(long userId) { return "tim:presence:user:" + userId; }
 
-    private static final class MapBuilder {
-        static java.util.Map<String, String> of(String k1, String v1, String k2, String v2, String k3, String v3, String k4, String v4) {
-            java.util.Map<String, String> map = new java.util.HashMap<>();
-            map.put(k1, v1); map.put(k2, v2); map.put(k3, v3); map.put(k4, v4); return map;
-        }
-    }
 }
