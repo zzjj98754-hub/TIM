@@ -14,6 +14,22 @@ try {
         }
         if (-not $ok) { throw "TIM node health check failed on port $port" }
     }
-    Write-Host 'TIM node health checks passed.'
+    $message = @{ messageId = 'smoke-message-1'; clientMessageId = 'smoke-client-1'; fromUserId = 9101; toUserId = 9102; content = 'compose smoke'; createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() } | ConvertTo-Json
+    Invoke-RestMethod 'http://localhost:8081/demo/messages' -Method Post -ContentType 'application/json' -Body $message | Out-Null
+    Invoke-RestMethod 'http://localhost:8081/demo/messages' -Method Post -ContentType 'application/json' -Body $message | Out-Null
+    $offline = @()
+    for ($i = 0; $i -lt 15; $i++) {
+        $offline = @(Invoke-RestMethod 'http://localhost:8082/demo/offline/9102?cursor=0&limit=20')
+        if ($offline | Where-Object { $_.messageId -eq 'smoke-message-1' }) { break }
+        Start-Sleep -Seconds 1
+    }
+    if ($offline.Count -ne 1 -or $offline[0].messageId -ne 'smoke-message-1') { throw 'Durable offline idempotency check failed' }
+    Invoke-RestMethod 'http://localhost:8081/demo/groups/9100/members/9101' -Method Put | Out-Null
+    Invoke-RestMethod 'http://localhost:8081/demo/groups/9100/members/9102' -Method Put | Out-Null
+    $group = @{ fromUserId = 9101; content = 'group smoke' } | ConvertTo-Json
+    Invoke-RestMethod 'http://localhost:8081/demo/groups/9100/messages' -Method Post -ContentType 'application/json' -Body $group | Out-Null
+    $groupMessages = @(Invoke-RestMethod 'http://localhost:8082/demo/groups/9100/messages/9102?cursor=0&limit=20')
+    if ($groupMessages.Count -lt 1) { throw 'Cross-node durable group read check failed' }
+    Write-Host 'TIM node health, durable offline idempotency, and cross-node group persistence checks passed.'
 }
 finally { docker compose down }
