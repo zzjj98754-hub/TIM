@@ -29,8 +29,8 @@ public final class ReConnectManager {
     public void reConnect(ChannelHandlerContext ctx) {
         buildExecutor() ;
         int attempt = attempts.getAndIncrement();
-        long base = Math.min(30L, 1L << Math.min(attempt, 5));
-        long jitter = ThreadLocalRandom.current().nextLong(0, Math.max(1, base / 4 + 1));
+        long base = ReconnectBackoff.baseDelaySeconds(attempt);
+        long jitter = ThreadLocalRandom.current().nextLong(0, ReconnectBackoff.jitterUpperExclusive(base));
         scheduledExecutorService.schedule(new ReConnectJob(ctx, this), base + jitter, TimeUnit.SECONDS);
     }
 
