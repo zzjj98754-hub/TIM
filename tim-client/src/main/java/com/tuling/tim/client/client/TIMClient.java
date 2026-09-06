@@ -4,6 +4,7 @@ import com.tuling.tim.client.config.AppConfiguration;
 import com.tuling.tim.client.init.TIMClientHandleInitializer;
 import com.tuling.tim.client.service.EchoService;
 import com.tuling.tim.client.service.MsgHandle;
+import com.tuling.tim.client.service.OfflineCursorStore;
 import com.tuling.tim.client.service.ReConnectManager;
 import com.tuling.tim.client.service.RouteRequest;
 import com.tuling.tim.client.service.impl.ClientInfo;
@@ -67,6 +68,9 @@ public class TIMClient {
 
     @Autowired
     private ReConnectManager reConnectManager;
+
+    @Autowired
+    private OfflineCursorStore offlineCursorStore;
 
     @Value("${tim.client.auto-start:true}")
     private boolean autoStart;
@@ -170,7 +174,16 @@ public class TIMClient {
      * 向服务器注册
      */
     private void loginTIMServer() {
-        TIMReqMsg login = new TIMReqMsg(userId, userName, Constants.CommandType.LOGIN);
+        java.util.Map<String, Object> loginPayload = new java.util.HashMap<>();
+        loginPayload.put("userName", userName);
+        loginPayload.put("offlineCursor", offlineCursorStore.current());
+        String payload;
+        try {
+            payload = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(loginPayload);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("cannot encode login payload", e);
+        }
+        TIMReqMsg login = new TIMReqMsg(userId, payload, Constants.CommandType.LOGIN);
         ChannelFuture future = channel.writeAndFlush(login);
         future.addListener((ChannelFutureListener) channelFuture ->
                 echoService.echo("Registry tim server success!")

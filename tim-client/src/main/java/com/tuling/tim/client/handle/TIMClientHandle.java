@@ -2,6 +2,7 @@ package com.tuling.tim.client.handle;
 
 import com.tuling.tim.client.service.EchoService;
 import com.tuling.tim.client.service.ReConnectManager;
+import com.tuling.tim.client.service.OfflineCursorStore;
 import com.tuling.tim.client.service.ShutDownMsg;
 import com.tuling.tim.client.service.impl.EchoServiceImpl;
 import com.tuling.tim.client.util.SpringBeanFactory;
@@ -38,6 +39,8 @@ public class TIMClientHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
     private ShutDownMsg shutDownMsg;
 
     private EchoService echoService;
+
+    private OfflineCursorStore offlineCursorStore;
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
@@ -130,9 +133,15 @@ public class TIMClientHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
     private void acknowledgeAfterHandling(ChannelHandlerContext ctx, String payload) {
         try {
-            String messageId = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readTree(payload).path("messageId").asText();
+            com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(payload);
+            String messageId = node.path("messageId").asText();
             if (!messageId.isEmpty()) ctx.writeAndFlush(new TIMReqMsg(0L, messageId, Constants.CommandType.ACK));
+            long deliveryCursor = node.path("deliveryCursor").asLong(0L);
+            if (deliveryCursor > 0L) {
+                if (offlineCursorStore == null) offlineCursorStore = SpringBeanFactory.getBean(OfflineCursorStore.class);
+                offlineCursorStore.advance(deliveryCursor);
+                ctx.writeAndFlush(new TIMReqMsg(0L, "OFFLINE:" + deliveryCursor, Constants.CommandType.ACK));
+            }
         } catch (Exception e) {
             LOGGER.warn("cannot ACK malformed chat payload", e);
         }

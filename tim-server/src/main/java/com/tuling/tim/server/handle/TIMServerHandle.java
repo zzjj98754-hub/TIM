@@ -76,12 +76,17 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
         LOGGER.info("received msg=[{}]", msg.toString());
 
         if (msg.getType() == Constants.CommandType.LOGIN) {
+            ObjectMapper mapper = SpringBeanFactory.getBean(ObjectMapper.class);
+            com.fasterxml.jackson.databind.JsonNode loginNode = mapper.readTree(msg.getReqMsg());
+            String userName = loginNode.path("userName").asText(msg.getReqMsg());
+            long offlineCursor = loginNode.path("offlineCursor").asLong(0L);
             //保存客户端与 Channel 之间的关系
             String[] session = SessionSocketHolder.put(msg.getRequestId(), ctx.channel()).split(":", 2);
-            SessionSocketHolder.saveSession(msg.getRequestId(), msg.getReqMsg());
+            SessionSocketHolder.saveSession(msg.getRequestId(), userName);
             SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
                     { SpringBeanFactory.getBean(RedisRouteService.class).online(msg.getRequestId(), session[0], Long.parseLong(session[1]));
-                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(msg.getRequestId(), ctx.channel()); });
+                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(msg.getRequestId(), ctx.channel());
+                      SpringBeanFactory.getBean(ReliableMessageService.class).replayOffline(msg.getRequestId(), offlineCursor, ctx.channel()); });
             LOGGER.info("client [{}] online success!!", msg.getReqMsg());
         }
 
@@ -114,8 +119,14 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
         }
 
         if (msg.getType() == Constants.CommandType.ACK) {
-            SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
-                    SpringBeanFactory.getBean(ReliableMessageService.class).acknowledge(msg.getReqMsg()));
+            ConnectionSession session = SessionSocketHolder.getSession(ctx.channel());
+            SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() -> {
+                if (session != null && msg.getReqMsg() != null && msg.getReqMsg().startsWith("OFFLINE:")) {
+                    SpringBeanFactory.getBean(ReliableMessageService.class).acknowledgeOffline(session.getUserId(), Long.parseLong(msg.getReqMsg().substring("OFFLINE:".length())));
+                } else {
+                    SpringBeanFactory.getBean(ReliableMessageService.class).acknowledge(msg.getReqMsg());
+                }
+            });
         }
 
     }

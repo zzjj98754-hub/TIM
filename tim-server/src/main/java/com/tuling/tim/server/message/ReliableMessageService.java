@@ -57,6 +57,17 @@ public class ReliableMessageService {
     }
 
     public void receiveFromNode(ChatMessage message) { deliverLocalOrOffline(message); }
+    public void replayOffline(long userId, long cursor, io.netty.channel.Channel channel) {
+        for (OfflineMessage offline : pullOffline(userId, cursor, 100)) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node = json.readTree(offline.getBody());
+                if (node instanceof com.fasterxml.jackson.databind.node.ObjectNode object) {
+                    object.put("deliveryCursor", offline.getDeliveryCursor());
+                    channel.writeAndFlush(new TIMReqMsg(requestId(offline.getMessageId()), json.writeValueAsString(object), Constants.CommandType.CHAT));
+                }
+            } catch (Exception e) { throw new IllegalStateException("offline replay failed", e); }
+        }
+    }
     private void dispatch(ChatMessage message) {
         String target = routes.findServer(message.getToUserId());
         if (target == null) { saveOffline(message, "recipient offline"); return; }
