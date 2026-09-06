@@ -10,6 +10,7 @@ import io.netty.channel.Channel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,7 +60,7 @@ public class ReliableMessageService {
         this.maxRetries = maxRetries; this.retryMs = retryMs; this.offlineLimit = offlineLimit; this.outboxMaxRetries = outboxMaxRetries;
     }
     @org.springframework.beans.factory.annotation.Autowired
-    void setBus(NodeMessageBus bus) { this.bus = bus; }
+    void setBus(@Lazy NodeMessageBus bus) { this.bus = bus; }
 
     @Transactional
     public void accept(ChatMessage message) {

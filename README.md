@@ -61,6 +61,10 @@ docker compose up -d --build
 - `tim-gateway` HTTP: `8090`
 - `tim-client` HTTP: `8003`
 
+如果宿主机 3306 已被占用，可将 MySQL 发布端口改为备用端口，例如
+PowerShell 中设置 `$env:TIM_MYSQL_PORT='13306'`；Compose 内部连接仍使用
+`mysql:3306`。
+
 ### 本地运行
 
 如果需要本地调试单个模块，先确保 Redis、MySQL、ZooKeeper 和 RocketMQ 可用，再按以下顺序启动：
