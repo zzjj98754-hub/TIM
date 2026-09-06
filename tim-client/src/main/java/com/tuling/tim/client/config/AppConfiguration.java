@@ -24,6 +24,9 @@ public class AppConfiguration {
     @Value("${tim.reconnect.count:5}")
     private int errorCount;
 
+    @Value("${tim.default.group.id:1}")
+    private long defaultGroupId;
+
     public Long getUserId() {
         return userId;
     }
@@ -64,4 +67,7 @@ public class AppConfiguration {
     public void setErrorCount(int errorCount) {
         this.errorCount = errorCount;
     }
+
+    public long getDefaultGroupId() { return defaultGroupId; }
+    public void setDefaultGroupId(long defaultGroupId) { this.defaultGroupId = defaultGroupId; }
 }

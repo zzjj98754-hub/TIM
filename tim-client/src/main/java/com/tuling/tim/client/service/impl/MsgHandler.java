@@ -99,13 +99,12 @@ public class MsgHandler implements MsgHandle {
 
     @Override
     public void groupChat(GroupReqVO groupReqVO) throws Exception {
-        routeRequest.sendGroupMsg(groupReqVO);
+        timClient.sendGroupChat(configuration.getDefaultGroupId(), groupReqVO.getMsg());
     }
 
     @Override
     public void p2pChat(P2PReqVO p2PReqVO) throws Exception {
-
-        routeRequest.sendP2PMsg(p2PReqVO);
+        timClient.sendChat(p2PReqVO.getReceiveUserId(), p2PReqVO.getMsg());
 
     }
 

@@ -143,17 +143,10 @@ public class RouteRequestImpl implements RouteRequest {
 
     @Override
     public void offLine() {
-        ChatReqVO vo = new ChatReqVO(appConfiguration.getUserId(), "offLine");
-        Response response = null;
-        try {
-            response = JsonHttpClient.post(okHttpClient, gatewayUrl, "/offLine", vo);
-            ensureSuccess(response);
-        } catch (Exception e) {
-            LOGGER.error("exception", e);
-            throw new RuntimeException(e);
-        } finally {
-            closeResponse(response);
-        }
+        // Route ownership is released by the authenticated Netty connection's
+        // session/epoch-aware disconnect path. Calling the legacy Gateway
+        // endpoint here could delete a replacement connection's route.
+        LOGGER.debug("offline is handled by Netty session close for user {}", appConfiguration.getUserId());
     }
 
     private void ensureSuccess(Response response) {

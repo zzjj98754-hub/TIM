@@ -225,6 +225,20 @@ public class TIMClient {
         }
     }
 
+    public void sendGroupChat(long groupId, String content) {
+        if (channel == null || !channel.isActive()) throw new IllegalStateException("TIM client is not connected");
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("fromUserId", userId);
+            payload.put("groupId", groupId);
+            payload.put("content", content);
+            channel.writeAndFlush(new TIMReqMsg(System.currentTimeMillis(), mapper.writeValueAsString(payload), Constants.CommandType.GROUP_CHAT));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalArgumentException("cannot encode group chat payload", e);
+        }
+    }
+
 
     /**
      * 1. clear route information.
