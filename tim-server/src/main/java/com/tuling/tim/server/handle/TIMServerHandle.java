@@ -15,6 +15,7 @@ import com.tuling.tim.server.route.RedisRouteService;
 import com.tuling.tim.server.message.ChatMessage;
 import com.tuling.tim.server.message.ReliableMessageService;
 import com.tuling.tim.server.group.GroupMessageService;
+import com.tuling.tim.common.security.ConnectToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
@@ -37,6 +38,10 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
     @Value("${tim.message.max-content-length:65536}")
     private int maxContentLength;
+    @Value("${tim.server.id:im-server-1}")
+    private String serverId;
+    @Value("${tim.connect-token.secret:}")
+    private String connectTokenSecret;
 
 
     /**
@@ -84,14 +89,23 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
             com.fasterxml.jackson.databind.JsonNode loginNode = mapper.readTree(msg.getReqMsg());
             String userName = loginNode.path("userName").asText(msg.getReqMsg());
             long offlineCursor = loginNode.path("offlineCursor").asLong(0L);
+            ConnectToken.Claims claims;
+            try {
+                claims = ConnectToken.verify(loginNode.path("connectToken").asText(null), serverId, connectTokenSecret, System.currentTimeMillis());
+            } catch (RuntimeException invalidToken) {
+                LOGGER.warn("rejecting invalid Netty login: {}", invalidToken.getMessage());
+                ctx.close();
+                return;
+            }
+            long userId = claims.userId();
             //保存客户端与 Channel 之间的关系
-            String[] session = SessionSocketHolder.put(msg.getRequestId(), ctx.channel()).split(":", 2);
-            SessionSocketHolder.saveSession(msg.getRequestId(), userName);
+            String[] session = SessionSocketHolder.put(userId, ctx.channel()).split(":", 2);
+            SessionSocketHolder.saveSession(userId, userName);
             SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
-                    { SpringBeanFactory.getBean(RedisRouteService.class).online(msg.getRequestId(), session[0], Long.parseLong(session[1]));
-                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(msg.getRequestId(), ctx.channel());
-                      SpringBeanFactory.getBean(ReliableMessageService.class).replayOffline(msg.getRequestId(), offlineCursor, ctx.channel()); });
-            LOGGER.info("client [{}] online success!!", msg.getReqMsg());
+                    { SpringBeanFactory.getBean(RedisRouteService.class).online(userId, session[0], Long.parseLong(session[1]));
+                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(userId, ctx.channel());
+                      SpringBeanFactory.getBean(ReliableMessageService.class).replayOffline(userId, offlineCursor, ctx.channel()); });
+            LOGGER.info("client [{}] online success!!", userId);
         }
 
         //心跳更新时间

@@ -60,6 +60,8 @@ public class TIMServerResVO implements Serializable {
         private String ip ;
         private Integer timServerPort;
         private Integer httpPort;
+        private String serverId;
+        private String connectToken;
 
         public String getIp() {
             return ip;
@@ -84,6 +86,10 @@ public class TIMServerResVO implements Serializable {
         public void setHttpPort(Integer httpPort) {
             this.httpPort = httpPort;
         }
+        public String getServerId() { return serverId; }
+        public void setServerId(String serverId) { this.serverId = serverId; }
+        public String getConnectToken() { return connectToken; }
+        public void setConnectToken(String connectToken) { this.connectToken = connectToken; }
 
         @Override
         public String toString() {

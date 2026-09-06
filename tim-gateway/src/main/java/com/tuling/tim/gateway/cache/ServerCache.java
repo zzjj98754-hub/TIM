@@ -96,6 +96,19 @@ public class ServerCache {
 
     }
 
+    public String serverIdForRoute(String route) {
+        for (String node : zkUtil.getAllNode()) {
+            try {
+                Map<?, ?> info = JSON.readValue(zkUtil.getNodeData(node), Map.class);
+                String candidate = info.get("host") + ":" + info.get("tcpPort") + ":" + info.get("httpPort");
+                if (route.equals(candidate)) return String.valueOf(info.get("serverId"));
+            } catch (Exception e) {
+                logger.warn("Unable to resolve server id for route {}", route, e);
+            }
+        }
+        throw new IllegalStateException("server id unavailable for selected route " + route);
+    }
+
     /**
      * rebuild cache list
      */
