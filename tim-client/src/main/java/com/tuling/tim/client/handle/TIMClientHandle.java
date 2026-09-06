@@ -99,25 +99,13 @@ public class TIMClientHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
         if (msg.getType() != Constants.CommandType.PING) {
             //回调消息
-            callBackMsg(msg.getReqMsg());
+            callBackMsg(msg.getReqMsg(), msg.getType() == Constants.CommandType.CHAT
+                    ? () -> acknowledgeAfterHandling(ctx, msg.getReqMsg()) : () -> { });
 
             //将消息中的 emoji 表情格式化为 Unicode 编码以便在终端可以显示
             String response = EmojiParser.parseToUnicode(msg.getReqMsg());
             echoService.echo(response);
         }
-
-        // The ACK is deliberately generated at the client edge: the server can now
-        // distinguish a successful socket write from a message the client observed.
-        if (msg.getType() == Constants.CommandType.CHAT) {
-            try {
-                String messageId = new com.fasterxml.jackson.databind.ObjectMapper()
-                        .readTree(msg.getReqMsg()).path("messageId").asText();
-                if (!messageId.isEmpty()) ctx.writeAndFlush(new TIMReqMsg(0L, messageId, Constants.CommandType.ACK));
-            } catch (Exception e) {
-                LOGGER.warn("cannot ACK malformed chat payload", e);
-            }
-        }
-
 
     }
 
@@ -126,13 +114,28 @@ public class TIMClientHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
      *
      * @param msg
      */
-    private void callBackMsg(String msg) {
+    private void callBackMsg(String msg, Runnable onSuccess) {
         threadPoolExecutor = SpringBeanFactory.getBean("callBackThreadPool", ThreadPoolExecutor.class);
         threadPoolExecutor.execute(() -> {
-            caller = SpringBeanFactory.getBean(MsgHandleCaller.class);
-            caller.getMsgHandleListener().handle(msg);
+            try {
+                caller = SpringBeanFactory.getBean(MsgHandleCaller.class);
+                caller.getMsgHandleListener().handle(msg);
+                onSuccess.run();
+            } catch (Exception e) {
+                LOGGER.warn("message handler failed; ACK withheld", e);
+            }
         });
 
+    }
+
+    private void acknowledgeAfterHandling(ChannelHandlerContext ctx, String payload) {
+        try {
+            String messageId = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(payload).path("messageId").asText();
+            if (!messageId.isEmpty()) ctx.writeAndFlush(new TIMReqMsg(0L, messageId, Constants.CommandType.ACK));
+        } catch (Exception e) {
+            LOGGER.warn("cannot ACK malformed chat payload", e);
+        }
     }
 
     @Override
