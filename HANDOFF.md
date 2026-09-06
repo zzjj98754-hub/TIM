@@ -14,6 +14,7 @@ Baseline audit and acceptance hardening.
 - Changed offline Redis index projection to use a per-user monotonic cursor and a messageId member with TTL.
 - Unified the Gateway/Netty route namespace as `tim:route:user:{userId}` Redis Hash with node/session/epoch/route fields.
 - Added clientMessageId idempotency, transactional-outbox tables/relay, MySQL offline index, group persistence tables, local group channel membership, and RocketMQ broadcast consumer.
+- Bound message and Outbox insertion in `ReliableMessageService.accept` with Spring `@Transactional`; retired Gateway HTTP fanout endpoints in favor of authenticated Netty CHAT/GROUP_CHAT frames.
 - Changed client reconnect scheduling to exponential backoff with jitter.
 
 ## Files changed in this phase
@@ -34,6 +35,7 @@ Baseline audit and acceptance hardening.
 - `docker compose config`: latest run exited 0.
 - `git diff --check`: latest run exited 0.
 - `docker version`: Docker CLI could not connect to the Docker Desktop Linux daemon, so `scripts/smoke-test.ps1` was not claimed as passed.
+- Docker Desktop executable was not present at the standard Windows installation path, so the daemon could not be started from this environment.
 - Full Docker Compose smoke test is pending: Docker CLI is installed but the Docker Desktop Linux daemon is not running (`//./pipe/dockerDesktopLinuxEngine` unavailable).
 
 ## Known blockers / boundaries
