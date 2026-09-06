@@ -30,7 +30,9 @@ public class RouteHandler {
         if (userInfo != null) {
             LOGGER.info("Account [{}] offline", userInfo.getUserName());
             ConnectionSession session = SessionSocketHolder.getSession(channel);
-            SessionSocketHolder.removeSession(userInfo.getUserId());
+            if (SessionSocketHolder.isCurrent(userInfo.getUserId(), channel)) {
+                SessionSocketHolder.removeSession(userInfo.getUserId());
+            }
             if (session != null) SpringBeanFactory.getBean(RedisRouteService.class)
                     .offline(userInfo.getUserId(), session.getSessionId(), session.getEpoch());
         }

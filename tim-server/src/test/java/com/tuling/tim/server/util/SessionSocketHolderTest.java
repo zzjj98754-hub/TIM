@@ -14,11 +14,13 @@ class SessionSocketHolderTest {
         try {
             SessionSocketHolder.put(90001L, oldChannel);
             SessionSocketHolder.put(90001L, newChannel);
+            SessionSocketHolder.saveSession(90001L, "new-session");
 
             SessionSocketHolder.remove(oldChannel);
 
             assertSame(newChannel, SessionSocketHolder.get(90001L));
             assertTrue(SessionSocketHolder.isCurrent(90001L, newChannel));
+            org.junit.jupiter.api.Assertions.assertEquals("new-session", SessionSocketHolder.getUserId(newChannel).getUserName());
         } finally {
             SessionSocketHolder.remove(oldChannel);
             SessionSocketHolder.remove(newChannel);
