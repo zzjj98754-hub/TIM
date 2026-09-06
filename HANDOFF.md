@@ -40,6 +40,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - Added authenticated-session checks for ACK frames and atomic route renewal on heartbeat outside the Netty EventLoop.
 - Added durable offline cursor reuse and a client continuous-prefix cursor store with optional atomic local-file persistence.
 - Changed group broadcast publication to `GROUP_MESSAGE_CREATED` through the transactional Outbox; Relay broadcasts only after commit.
+- Added scheduled MySQL-to-Redis offline projection rebuild, bounded by `tim.offline.max-size`, for Redis cache loss/recovery.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -92,4 +93,4 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - Commits: `cf19271`, `f48832b`, `1313c7d`, `f38cd25`, `beb875f`, `0bf868a`, `1fee929`.
 - Latest full Maven test, verify, Compose config, and diff-check passed after these changes.
 - Added database conditional lease claiming/recovery for due `message_delivery` rows and persisted server-side offline ACK upper-bound state in migration `V3__offline_ack_cursor.sql`.
-- Remaining: Redis offline projection rebuild after cache loss and Docker two-node failure-injection acceptance; runtime middleware validation is still unverified because the base image pull previously timed out.
+- Remaining: Docker two-node failure-injection acceptance; runtime middleware validation is still unverified because the base image pull previously timed out.

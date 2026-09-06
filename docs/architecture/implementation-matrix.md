@@ -11,7 +11,7 @@
 | Outbox 并发 Relay | IMPLEMENTED | `OutboxRepository.claimPending` 使用短租约 `PROCESSING`；过期重试，超限进入 `DEAD` |
 | 客户端重复投递去重 | IMPLEMENTED | `MessageDeduplicator` 有界按 messageId/clientMessageId 去重；首次回调成功后 ACK，重复帧只 ACK |
 | 服务端幂等 | IMPLEMENTED | Redis 快速去重 + MySQL `message_id` 与 `(from_user_id, client_message_id)` 唯一约束 |
-| 离线消息 | PARTIAL-IMPLEMENTED | MySQL 正文/索引 + `im:offline:{userId}` ZSet；重复 messageId 复用游标，客户端连续游标和分页已覆盖；服务端超前 ACK 校验与 Redis 重建仍待完成 |
+| 离线消息 | IMPLEMENTED-LOCALLY | MySQL 正文/索引/确认游标 + `im:offline:{userId}` ZSet；重复 messageId 复用游标，客户端连续游标和分页已覆盖，定时任务可从 MySQL 重建 Redis 投影；双节点运行态仍未验证 |
 | 普通群写扩散 | IMPLEMENTED | `WriteFanoutStrategy`, `group_message_inbox`；成员索引唯一，正文不按成员复制 |
 | 超大群读扩散 | IMPLEMENTED | `ReadFanoutStrategy`, `group_member_cursor`；单份正文与成员读取游标 |
 | 群策略、成员权限与序号 | IMPLEMENTED | `GroupFanoutStrategySelector` 统一阈值选择；`GroupMessageService` 以 MySQL `group_member` 校验权限/规模，事务锁定 `group_sequence` 生成多节点安全序号 |

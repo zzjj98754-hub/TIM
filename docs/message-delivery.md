@@ -6,4 +6,4 @@ Outbox Relay 使用 `PROCESSING` 短租约认领事件，发送到 RocketMQ 后�
 
 核心入口：`tim-server/.../reliable/ReliableMessageService.java`、`.../mq/RocketMqNodeMessageBus.java`、`.../handler/TIMServerHandle.java`、`.../route/RedisRouteService.java`。
 
-群消息在正文、序号和成员 Inbox 事务中追加 `GROUP_MESSAGE_CREATED` Outbox；Relay 提交后才调用 RocketMQ 广播，重复事件由消息 ID 和本地客户端去重保护。
+群消息在正文、序号和成员 Inbox 事务中追加 `GROUP_MESSAGE_CREATED` Outbox；Relay 提交后才调用 RocketMQ 广播，重复事件由消息 ID 和本地客户端去重保护。Redis 离线索引丢失时，定时任务按 MySQL `offline_message_index` 重建近期 ZSet 投影。
