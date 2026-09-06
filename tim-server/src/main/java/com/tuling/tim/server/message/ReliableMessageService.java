@@ -25,6 +25,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.tuling.tim.server.web.WebSocketSessionRegistry;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
 
 /** Main learning path: route -> node transport -> local push -> ACK -> bounded retry/offline. */
 @Service
@@ -130,6 +133,15 @@ public class ReliableMessageService {
     }
     private void deliverLocalOrOffline(ChatMessage message) {
         Channel channel = SessionSocketHolder.get(message.getToUserId());
+        WebSocketSession web = WebSocketSessionRegistry.get(message.getToUserId());
+        if ((channel == null || !channel.isActive()) && web != null && web.isOpen()) {
+            try {
+                web.sendMessage(new TextMessage(json.writeValueAsString(java.util.Map.of("type", "CHAT_MESSAGE", "messageId", message.getMessageId(), "clientMessageId", message.getClientMessageId(), "senderId", message.getFromUserId(), "receiverId", message.getToUserId(), "content", message.getContent(), "timestamp", message.getCreatedAt()))));
+                if (deliveries != null) deliveries.markDelivering(message.getMessageId(), message.getToUserId(), System.currentTimeMillis() + retryMs);
+                pending.putIfAbsent(message.getMessageId(), new PendingDelivery(message, System.currentTimeMillis() + retryMs));
+                return;
+            } catch (Exception ex) { saveOffline(message, "websocket push failed"); return; }
+        }
         if (channel == null || !channel.isActive()) { saveOffline(message, "channel offline"); return; }
         try {
             channel.writeAndFlush(new TIMReqMsg(requestId(message.getMessageId()), json.writeValueAsString(message), Constants.CommandType.CHAT));
