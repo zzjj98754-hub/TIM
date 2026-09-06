@@ -217,5 +217,5 @@ Gateway 的 `/p2pRoute` 和 `/groupRoute` 仅保留为明确返回弃用提示�
 
 先执行 `./mvnw.cmd package`，再执行 `scripts/smoke-test.ps1`（Linux 使用
 `bash scripts/smoke-test.sh`）。Smoke脚本会检查Compose服务、构建两个TIM节点并
-访问 `/actuator/health`。如果Docker daemon未启动，只能执行 `docker compose config`
+访问 `/actuator/health`，并验证离线消息幂等和跨节点群消息持久化读取。如果Docker daemon未启动，只能执行 `docker compose config`
 和 Maven 测试，不能宣称容器验收通过。

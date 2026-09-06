@@ -10,13 +10,13 @@
 
 ## 运行态边界
 
-基础 Compose 启动和健康检查已通过。烟测使用 `TIM_MYSQL_PORT=13306` 避开宿主机 3306 占用；Flyway V1–V3 在空 MySQL 卷上成功执行。仍未将跨节点私聊、群广播业务消息、节点宕机恢复写成已通过，因为现有 smoke 脚本只验证基础设施和 Actuator：
+基础 Compose 启动、健康检查、Flyway、离线幂等和跨节点群消息持久化读取已通过。烟测使用 `TIM_MYSQL_PORT=13306` 避开宿主机 3306 占用；仍未将真实 TCP 双客户端私聊、群广播在线消费、节点宕机恢复写成已通过：
 
 ```powershell
 ./scripts/smoke-test.ps1
 ```
 
-该脚本会启动 Compose、检查两个节点的 `/actuator/health`，结束时关闭 Compose。中间件级跨节点消息、离线重连和故障恢复仍需在脚本基础上继续做端到端验证。
+该脚本会启动 Compose、检查两个节点的 `/actuator/health`，通过 HTTP demo 接口验证共享 MySQL 的离线幂等和群持久化读取，结束时关闭 Compose。TCP 在线投递、离线重连和故障恢复仍需继续做端到端验证。
 
 ## 当前结论
 

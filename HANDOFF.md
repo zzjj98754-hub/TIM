@@ -76,19 +76,18 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
 - `docker info`: Docker Desktop Linux daemon was available during the latest attempt.
-- `scripts/smoke-test.ps1`: failed while building `tim-node-1`/`tim-node-2`; Docker could not fetch the Docker Hub OAuth token for `eclipse-temurin:17-jre-jammy` because the registry connection timed out.
-- No TIM container health check or two-node runtime result was claimed; the smoke script's cleanup left the Compose project stopped.
+- `scripts/smoke-test.ps1`: latest run passed with `TIM_MYSQL_PORT=13306`; both TIM nodes and all middleware became healthy, and the script's durable offline idempotency and cross-node group persistence assertions passed.
 
 ## Known blockers / boundaries
 - Existing working tree contains extensive user modifications; do not reset or discard them.
 - The current project is Java 17/Spring Boot 3, not Java 21.
-- Full runtime integration against Redis, MySQL, ZooKeeper, and RocketMQ remains unverified because the required base image could not be pulled from Docker Hub.
-- The focused/unit tests prove local routing, persistence orchestration, cursor semantics, retry/ACK behavior, and broadcast fanout; they do not replace the pending two-node middleware smoke test.
+- Real TCP client-to-client delivery, node-kill recovery, Redis/RocketMQ fault injection, and online RocketMQ broadcast consumption remain unverified.
+- The HTTP smoke assertions prove shared durable persistence paths, but do not replace the pending TCP/middleware failure scenarios.
 
 ## Next actions
-1. In an environment with Docker Hub access or a locally cached `eclipse-temurin:17-jre-jammy`, run `./mvnw.cmd package` and `scripts/smoke-test.ps1`.
-2. Verify two-node RocketMQ private delivery, broadcast fanout, Redis route ownership, MySQL Flyway startup, and offline replay against the Compose stack.
-3. Do not claim the Docker smoke test passed until those runtime checks produce evidence.
+1. Run a real two-client Netty acceptance against the Compose nodes.
+2. Verify node-kill recovery, ACK loss/retry, Redis route loss, RocketMQ duplicate delivery, and concurrent group sequence behavior.
+3. Keep the current smoke result scoped to health, durable offline idempotency, and cross-node group persistence.
 
 ## Enterprise reliability v2 continuation
 - Commits: `cf19271`, `f48832b`, `1313c7d`, `f38cd25`, `beb875f`, `0bf868a`, `1fee929`.

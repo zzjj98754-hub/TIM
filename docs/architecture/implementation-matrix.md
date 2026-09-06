@@ -18,6 +18,6 @@
 | 群节点广播 | IMPLEMENTED | `TIM_GROUP_BROADCAST` + RocketMQ `BROADCASTING` + `GroupChannelPushService` 本地集合 |
 | 业务线程池隔离与指标 | IMPLEMENTED | `BeanConfig` 有界 `ArrayBlockingQueue`、显式拒绝策略；Actuator 暴露 active/queue/pool/completed/rejected |
 | 业务正文长度限制 | IMPLEMENTED | `TIMServerHandle` 使用 `tim.message.max-content-length`（默认 64 KiB）拒绝空正文和超限正文 |
-| 双节点 Compose | STATIC-CONFIRMED | `docker-compose.yml` 为 Redis/MySQL/ZooKeeper/RocketMQ/TIM 节点配置健康检查与健康依赖；本环境 Docker daemon 不可用，运行态未验证 |
+| 双节点 Compose | RUNTIME-CONFIRMED (限定范围) | `scripts/smoke-test.ps1` 已验证两个 TIM 节点、Redis/MySQL/ZooKeeper/RocketMQ 健康启动、Flyway、离线幂等和跨节点群持久化读取；真实 TCP 客户端和故障注入仍未验证 |
 | CI | IMPLEMENTED | `.github/workflows/ci.yml` 执行 Maven test/verify 与 Compose 静态校验 |
 | 完整运行态故障注入 | PENDING | 需要可用 Docker 环境验证 Redis/MQ/ZK 故障和双节点端到端链路 |
