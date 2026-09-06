@@ -25,6 +25,7 @@ import io.netty.handler.timeout.IdleStateEvent;
 import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * @since JDK 1.8
@@ -33,6 +34,9 @@ import org.slf4j.LoggerFactory;
 public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(TIMReqMsg.class);
+
+    @Value("${tim.message.max-content-length:65536}")
+    private int maxContentLength;
 
 
     /**
@@ -108,6 +112,7 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
             ConnectionSession session = SessionSocketHolder.getSession(ctx.channel());
             if (!isAuthenticated(session, ctx.channel())) { ctx.close(); return; }
             ChatMessage chat = SpringBeanFactory.getBean(ObjectMapper.class).readValue(msg.getReqMsg(), ChatMessage.class);
+            if (!contentWithinLimit(chat, maxContentLength)) { ctx.close(); return; }
             trustSessionIdentity(chat, session);
             SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() -> {
                 if (msg.getType() == Constants.CommandType.GROUP_CHAT) {
@@ -137,6 +142,11 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
     static boolean isAuthenticated(ConnectionSession session, io.netty.channel.Channel channel) {
         return session != null && SessionSocketHolder.isCurrent(session.getUserId(), channel);
+    }
+
+    static boolean contentWithinLimit(ChatMessage message, int maxLength) {
+        return message != null && maxLength > 0 && message.getContent() != null
+                && message.getContent().length() <= maxLength;
     }
 
 

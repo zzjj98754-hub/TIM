@@ -29,4 +29,14 @@ class TIMServerHandleTest {
         SessionSocketHolder.put(42L, channel);
         assertTrue(TIMServerHandle.isAuthenticated(SessionSocketHolder.getSession(channel), channel));
     }
+
+    @Test
+    void rejectsMissingOrOversizedMessageContent() {
+        ChatMessage message = new ChatMessage();
+        message.setContent("ok");
+        assertTrue(TIMServerHandle.contentWithinLimit(message, 2));
+        assertFalse(TIMServerHandle.contentWithinLimit(message, 1));
+        message.setContent(null);
+        assertFalse(TIMServerHandle.contentWithinLimit(message, 100));
+    }
 }
