@@ -13,6 +13,7 @@ class SessionSocketHolderTest {
         NioSocketChannel newChannel = new NioSocketChannel();
         try {
             SessionSocketHolder.put(90001L, oldChannel);
+            SessionSocketHolder.joinGroup(77L, oldChannel);
             SessionSocketHolder.put(90001L, newChannel);
             SessionSocketHolder.saveSession(90001L, "new-session");
 
@@ -20,6 +21,7 @@ class SessionSocketHolderTest {
 
             assertSame(newChannel, SessionSocketHolder.get(90001L));
             assertTrue(SessionSocketHolder.isCurrent(90001L, newChannel));
+            org.junit.jupiter.api.Assertions.assertFalse(SessionSocketHolder.groupChannels(77L).contains(oldChannel));
             org.junit.jupiter.api.Assertions.assertEquals("new-session", SessionSocketHolder.getUserId(newChannel).getUserName());
         } finally {
             SessionSocketHolder.remove(oldChannel);

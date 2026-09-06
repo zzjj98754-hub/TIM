@@ -35,7 +35,11 @@ public class SessionSocketHolder {
     public static String put(Long id, Channel socketChannel) {
         String sessionId = UUID.randomUUID().toString();
         long epoch = System.currentTimeMillis();
-        CHANNEL_MAP.put(id, socketChannel);
+        Channel previous = CHANNEL_MAP.put(id, socketChannel);
+        if (previous != null && previous != socketChannel) {
+            CONNECTIONS.remove(previous);
+            GROUP_CHANNELS.values().forEach(channels -> channels.remove(previous));
+        }
         CONNECTIONS.put(socketChannel, new ConnectionSession(id, sessionId, epoch));
         return sessionId + ":" + epoch;
     }
