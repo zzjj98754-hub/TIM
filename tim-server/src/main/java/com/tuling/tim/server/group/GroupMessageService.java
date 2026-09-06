@@ -21,14 +21,13 @@ import java.util.Map;
 @Service
 public class GroupMessageService {
     private final StringRedisTemplate redis;
-    private final ReliableMessageService messages;
     private final ObjectMapper json;
     private final JdbcTemplate jdbc;
     private final NodeMessageBus bus;
     private final int writeFanoutLimit;
     public GroupMessageService(StringRedisTemplate redis, ReliableMessageService messages, ObjectMapper json, JdbcTemplate jdbc, NodeMessageBus bus,
                                @Value("${tim.group.write-fanout-limit:500}") int writeFanoutLimit) {
-        this.redis = redis; this.messages = messages; this.json = json; this.jdbc = jdbc; this.bus = bus; this.writeFanoutLimit = writeFanoutLimit;
+        this.redis = redis; this.json = json; this.jdbc = jdbc; this.bus = bus; this.writeFanoutLimit = writeFanoutLimit;
     }
     public void addMember(long groupId, long userId) {
         jdbc.update("INSERT INTO im_group (group_id, name, created_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE group_id=group_id", groupId, "group-" + groupId);
@@ -73,9 +72,10 @@ public class GroupMessageService {
     }
     private synchronized long nextSequence(long groupId) {
         jdbc.update("INSERT INTO group_sequence (group_id, next_sequence) VALUES (?, 1) ON DUPLICATE KEY UPDATE group_id=group_id", groupId);
-        jdbc.update("UPDATE group_sequence SET next_sequence=next_sequence+1 WHERE group_id=?", groupId);
         Long value = jdbc.queryForObject("SELECT next_sequence FROM group_sequence WHERE group_id=?", Long.class, groupId);
-        return value == null ? 1L : value;
+        long sequence = value == null ? 1L : value;
+        jdbc.update("UPDATE group_sequence SET next_sequence=? WHERE group_id=?", sequence + 1, groupId);
+        return sequence;
     }
     private List<String> loadBodies(List<String> ids, long groupId) {
         List<String> bodies = new ArrayList<>();
@@ -91,8 +91,4 @@ public class GroupMessageService {
         return bodies;
     }
     private String membersKey(long id) { return "im:group:members:" + id; }
-    private ChatMessage copy(ChatMessage source) {
-        ChatMessage copy = new ChatMessage(); copy.setFromUserId(source.getFromUserId()); copy.setGroupId(source.getGroupId());
-        copy.setContent(source.getContent()); copy.setCreatedAt(source.getCreatedAt()); return copy;
-    }
 }
