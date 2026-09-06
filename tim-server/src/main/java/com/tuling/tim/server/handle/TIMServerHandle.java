@@ -104,7 +104,7 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
             ConnectionSession session = SessionSocketHolder.getSession((NioSocketChannel) ctx.channel());
             if (session == null) { ctx.close(); return; }
             ChatMessage chat = SpringBeanFactory.getBean(ObjectMapper.class).readValue(msg.getReqMsg(), ChatMessage.class);
-            chat.setFromUserId(session.getUserId());
+            trustSessionIdentity(chat, session);
             SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() -> {
                 if (msg.getType() == Constants.CommandType.GROUP_CHAT) {
                     SpringBeanFactory.getBean(com.tuling.tim.server.group.GroupMessageService.class).send(chat);
@@ -119,6 +119,10 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
                     SpringBeanFactory.getBean(ReliableMessageService.class).acknowledge(msg.getReqMsg()));
         }
 
+    }
+
+    static void trustSessionIdentity(ChatMessage message, ConnectionSession session) {
+        message.setFromUserId(session.getUserId());
     }
 
 
