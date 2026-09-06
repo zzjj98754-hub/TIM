@@ -1,7 +1,7 @@
 # TIM implementation handoff
 
 ## Current phase
-Baseline audit and acceptance hardening.
+Resume-alignment implementation complete locally; middleware smoke test pending.
 
 ## Completed in this phase
 - Audited the existing multi-module Java 17 TIM project and preserved all pre-existing user changes.
@@ -16,6 +16,10 @@ Baseline audit and acceptance hardening.
 - Added clientMessageId idempotency, transactional-outbox tables/relay, MySQL offline index, group persistence tables, local group channel membership, and RocketMQ broadcast consumer.
 - Bound message and Outbox insertion in `ReliableMessageService.accept` with Spring `@Transactional`; retired Gateway HTTP fanout endpoints in favor of authenticated Netty CHAT/GROUP_CHAT frames.
 - Changed client reconnect scheduling to exponential backoff with jitter.
+- Routed the CLI client's P2P/GROUP_CHAT commands through the authenticated Netty channel; legacy HTTP push now returns a deprecation response.
+- Added cursored offline records, Netty-login replay, post-handler message/cursor ACKs, Redis/MySQL page de-duplication, and Redis fast dedup before persistence.
+- Added focused tests for authenticated sender identity, replacement-session cleanup, retry/ACK behavior, group broadcast, offline trimming/fallback, and message IDs.
+- Made local session maps use Netty `Channel`, fixed string message IDs in push request IDs, and made ZooKeeper root creation safe under concurrent node startup.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -27,8 +31,9 @@ Baseline audit and acceptance hardening.
 - `HANDOFF.md`
 
 ## Database and messaging status
-- Existing code uses `im_message` and a local/optional RocketMQ node bus.
-- The repository still needs a complete Flyway migration set and full transactional outbox tables before claiming production-grade delivery.
+- `im_message`, `outbox_event`, offline index, group, member, sequence, group-message, inbox, and member-cursor tables are defined in `schema.sql`, `script/init.sql`, and Flyway `V1__tim_core.sql`.
+- `tim.mq.mode=rocketmq` uses a node-targeted RocketMQ topic and a separate `BROADCASTING` group topic so every active node receives group broadcasts; `local` remains the no-broker development fallback.
+- Redis route Hash is `tim:route:user:{userId}`; offline ZSet is `im:offline:{userId}` with messageId members and per-user delivery cursors.
 
 ## Validation
 - `./mvnw.cmd test`: latest run exited 0; surefire reports contain no non-zero failures/errors.
@@ -41,10 +46,10 @@ Baseline audit and acceptance hardening.
 ## Known blockers / boundaries
 - Existing working tree contains extensive user modifications; do not reset or discard them.
 - The current project is Java 17/Spring Boot 3, not Java 21.
-- Full resume-claim coverage (Flyway, transactional outbox, complete ACK state machine, hybrid group persistence, and integration tests against all middleware) remains to be audited and completed.
+- Full runtime integration against Redis, MySQL, ZooKeeper, and RocketMQ remains unverified because the Docker Linux daemon is unavailable in this environment.
+- The focused/unit tests prove local routing, persistence orchestration, cursor semantics, retry/ACK behavior, and broadcast fanout; they do not replace the pending two-node middleware smoke test.
 
 ## Next actions
-1. Run Maven tests and Compose config after the hardening changes.
-2. Inspect failures and add focused unit tests for route ownership and offline cursor behavior.
-3. Complete remaining schema/documentation evidence without overstating unverified capabilities.
-4. Review secrets and diff, commit, inspect remote, then push without force.
+1. When Docker Engine is available, run `./mvnw.cmd package` and `scripts/smoke-test.ps1`.
+2. Verify two-node RocketMQ private delivery, broadcast fanout, Redis route ownership, MySQL Flyway startup, and offline replay against the Compose stack.
+3. Do not claim the Docker smoke test passed until those runtime checks produce evidence.
