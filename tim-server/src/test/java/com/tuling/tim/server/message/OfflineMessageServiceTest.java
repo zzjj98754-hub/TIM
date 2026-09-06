@@ -15,6 +15,20 @@ import static org.mockito.Mockito.*;
 
 class OfflineMessageServiceTest {
     @Test
+    void redisFailureDoesNotPreventDurableOfflineIndex() {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        when(redis.opsForZSet()).thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("test outage"));
+        MessageHistoryRepository history = mock(MessageHistoryRepository.class);
+        when(history.indexOffline(2L, "offline-durable")).thenReturn(9L);
+        ReliableMessageService service = newService(redis, history, 100);
+        ChatMessage message = message("offline-durable");
+
+        service.saveOffline(message, "recipient offline");
+
+        verify(history).indexOffline(2L, "offline-durable");
+    }
+
+    @Test
     void offlineIndexIsTrimmedToConfiguredCapacity() {
         StringRedisTemplate redis = mock(StringRedisTemplate.class);
         ValueOperations<String, String> values = mock(ValueOperations.class);
@@ -25,13 +39,15 @@ class OfflineMessageServiceTest {
         when(zsets.add(anyString(), anyString(), anyDouble())).thenReturn(true);
         when(zsets.zCard(anyString())).thenReturn(3L);
         MessageHistoryRepository history = mock(MessageHistoryRepository.class);
+        when(history.indexOffline(2L, "offline-3")).thenReturn(3L);
         ReliableMessageService service = newService(redis, history, 2);
 
         ChatMessage message = message("offline-3");
         service.saveOffline(message, "recipient offline");
 
         verify(zsets).removeRange("im:offline:2", 0L, 0L);
-        verify(history).indexOffline(2L, 3L, "offline-3");
+        verify(history).indexOffline(2L, "offline-3");
+        verify(values, never()).increment(anyString());
     }
 
     @Test

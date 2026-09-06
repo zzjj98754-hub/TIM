@@ -127,6 +127,7 @@ public class ReliableMessageService {
         }
     }
     private void dispatch(ChatMessage message) {
+        history.markRouting(message.getMessageId());
         String target = routes.findServer(message.getToUserId());
         if (target == null) { saveOffline(message, "recipient offline"); return; }
         if (routes.serverId().equals(target)) deliverLocalOrOffline(message); else bus.forward(target, message);
@@ -138,6 +139,7 @@ public class ReliableMessageService {
             try {
                 web.sendMessage(new TextMessage(json.writeValueAsString(java.util.Map.of("type", "CHAT_MESSAGE", "messageId", message.getMessageId(), "clientMessageId", message.getClientMessageId(), "senderId", message.getFromUserId(), "receiverId", message.getToUserId(), "content", message.getContent(), "timestamp", message.getCreatedAt()))));
                 if (deliveries != null) deliveries.markDelivering(message.getMessageId(), message.getToUserId(), System.currentTimeMillis() + retryMs);
+                history.markDelivering(message.getMessageId(), message.getToUserId());
                 pending.putIfAbsent(message.getMessageId(), new PendingDelivery(message, System.currentTimeMillis() + retryMs));
                 return;
             } catch (Exception ex) { saveOffline(message, "websocket push failed"); return; }
@@ -146,6 +148,7 @@ public class ReliableMessageService {
         try {
             channel.writeAndFlush(new TIMReqMsg(requestId(message.getMessageId()), json.writeValueAsString(message), Constants.CommandType.CHAT));
             if (deliveries != null) deliveries.markDelivering(message.getMessageId(), message.getToUserId(), System.currentTimeMillis() + retryMs);
+            history.markDelivering(message.getMessageId(), message.getToUserId());
             pending.putIfAbsent(message.getMessageId(), new PendingDelivery(message, System.currentTimeMillis() + retryMs));
         } catch (Exception ex) { saveOffline(message, "push failed"); }
     }
@@ -153,13 +156,13 @@ public class ReliableMessageService {
         try { return Long.parseLong(messageId); }
         catch (NumberFormatException ignored) { return Integer.toUnsignedLong(messageId.hashCode()); }
     }
-    public void acknowledge(String messageId) { acknowledge(messageId, -1L); }
+    @Transactional
     public void acknowledge(String messageId, long recipientId) {
         pending.remove(messageId);
-        if (deliveries == null || recipientId <= 0 || deliveries.acknowledge(messageId, recipientId)) {
-            history.updateStatus(messageId, "ACKED");
-            count("tim_message_ack_total");
-        }
+        if (deliveries == null || recipientId <= 0) return;
+        if (!deliveries.acknowledge(messageId, recipientId)) return;
+        if (!history.acknowledge(messageId, recipientId)) throw new IllegalStateException("message ACK state mismatch: " + messageId);
+        count("tim_message_ack_total");
     }
     @Scheduled(fixedDelayString = "${tim.delivery.scan-ms:1000}")
     void retryPending() {
@@ -196,27 +199,18 @@ public class ReliableMessageService {
     }
     public void saveOffline(ChatMessage message, String reason) {
         count("tim_message_offline_total");
+        history.insertIfAbsent(message, DeliveryStatus.OFFLINE.name());
+        long deliveryCursor = history.indexOffline(message.getToUserId(), message.getMessageId());
+        if (deliveries != null) deliveries.markOffline(message.getMessageId(), message.getToUserId());
         try {
             String key = "im:offline:" + message.getToUserId();
-            Long existingCursor = history.findOfflineCursor(message.getToUserId(), message.getMessageId());
-            if (existingCursor != null && existingCursor > 0L) {
-                redis.opsForZSet().add(key, message.getMessageId(), existingCursor.doubleValue());
-                redis.expire(key, Duration.ofDays(7));
-                if (deliveries != null) deliveries.markOffline(message.getMessageId(), message.getToUserId());
-                return;
-            }
-            // messageId is the idempotent member; a per-user cursor is assigned by Redis.
-            Long cursor = redis.opsForValue().increment("im:offline:cursor:" + message.getToUserId());
-            long deliveryCursor = cursor == null ? 0L : cursor;
             redis.opsForZSet().add(key, message.getMessageId(), (double) deliveryCursor);
             redis.expire(key, Duration.ofDays(7));
-            history.indexOffline(message.getToUserId(), deliveryCursor, message.getMessageId());
             Long size = redis.opsForZSet().zCard(key);
             if (size != null && size > offlineLimit) redis.opsForZSet().removeRange(key, 0, size - offlineLimit - 1);
-            history.insertIfAbsent(message, "OFFLINE");
-        } catch (Exception ignored) { history.insertIfAbsent(message, "OFFLINE"); }
-        history.markOffline(message.getMessageId());
-        if (deliveries != null) deliveries.markOffline(message.getMessageId(), message.getToUserId());
+        } catch (RuntimeException e) {
+            LOGGER.warn("offline Redis projection deferred messageId={} recipientId={} cursor={}", message.getMessageId(), message.getToUserId(), deliveryCursor, e);
+        }
     }
     public List<OfflineMessage> pullOffline(long userId, long cursor, int limit) {
         String key = "im:offline:" + userId;

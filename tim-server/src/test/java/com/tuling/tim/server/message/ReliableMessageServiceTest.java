@@ -83,7 +83,12 @@ class ReliableMessageServiceTest {
         when(routes.findServer(2L)).thenReturn("node-1");
         when(routes.serverId()).thenReturn("node-1");
         MessageHistoryRepository history = mock(MessageHistoryRepository.class);
-        ReliableMessageService service = newService(routes, 0L, history);
+        when(history.acknowledge("ack-me", 2L)).thenReturn(true);
+        DeliveryRepository deliveries = mock(DeliveryRepository.class);
+        when(deliveries.acknowledge("ack-me", 2L)).thenReturn(true);
+        ReliableMessageService service = new ReliableMessageService(routes, mock(StringRedisTemplate.class), history,
+                new ObjectMapper(), new SnowflakeIdGenerator(), mock(OutboxRepository.class), deliveries,
+                3, 0L, 100, 10);
         EmbeddedChannel channel = new EmbeddedChannel();
         try {
             SessionSocketHolder.put(2L, channel);
@@ -91,10 +96,10 @@ class ReliableMessageServiceTest {
 
             service.receiveFromNode(message);
             assertNotNull(channel.readOutbound());
-            service.acknowledge(message.getMessageId());
+            service.acknowledge(message.getMessageId(), 2L);
             service.retryPending();
 
-            verify(history).updateStatus(message.getMessageId(), "ACKED");
+            verify(history).acknowledge(message.getMessageId(), 2L);
             org.junit.jupiter.api.Assertions.assertNull(channel.readOutbound());
         } finally {
             SessionSocketHolder.remove(channel);

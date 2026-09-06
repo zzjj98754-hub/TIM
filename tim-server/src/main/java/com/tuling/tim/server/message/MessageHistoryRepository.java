@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Collection;
@@ -24,15 +25,44 @@ public class MessageHistoryRepository {
         } catch (DuplicateKeyException e) { return false; }
         catch (JsonProcessingException e) { throw new IllegalStateException("serialize message", e); }
     }
-    public void updateStatus(String id, String status) { jdbc.update("UPDATE im_message SET status = ? WHERE message_id = ?", status, id); }
+    public void markRouting(String id) {
+        jdbc.update("UPDATE im_message SET status='ROUTING' WHERE message_id=? AND status='PENDING'", id);
+    }
+    public void markDelivering(String id, long recipientId) {
+        jdbc.update("UPDATE im_message SET status='DELIVERING' WHERE message_id=? AND to_user_id=? AND status IN ('PENDING','ROUTING','DELIVERING')", id, recipientId);
+    }
+    public boolean acknowledge(String id, long recipientId) {
+        return jdbc.update("UPDATE im_message SET status='ACKED', acked_at=CURRENT_TIMESTAMP WHERE message_id=? AND to_user_id=? AND status IN ('DELIVERING','OFFLINE')", id, recipientId) == 1;
+    }
     public void markOffline(String id) {
         jdbc.update("UPDATE im_message SET status='OFFLINE' WHERE message_id=? AND status IN ('PENDING','ROUTING','DELIVERING')", id);
     }
     public List<String> findAfter(long userId, long after, int limit) {
         return jdbc.queryForList("SELECT body FROM im_message WHERE to_user_id = ? AND created_at > ? ORDER BY created_at LIMIT ?", String.class, userId, after, limit);
     }
-    public void indexOffline(long userId, long cursor, String messageId) {
-        jdbc.update("INSERT INTO offline_message_index (user_id, delivery_cursor, message_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE message_id=message_id", userId, cursor, messageId);
+    @Transactional
+    public long indexOffline(long userId, String messageId) {
+        Long existing = findOfflineCursor(userId, messageId);
+        if (existing != null) {
+            markOffline(messageId);
+            return existing;
+        }
+        jdbc.update("INSERT INTO offline_cursor_sequence (user_id, next_cursor) VALUES (?, 1) ON DUPLICATE KEY UPDATE user_id=user_id", userId);
+        Long next = jdbc.queryForObject("SELECT next_cursor FROM offline_cursor_sequence WHERE user_id=? FOR UPDATE", Long.class, userId);
+        long cursor = next == null ? 1L : next;
+        try {
+            jdbc.update("INSERT INTO offline_message_index (user_id, delivery_cursor, message_id) VALUES (?, ?, ?)", userId, cursor, messageId);
+            jdbc.update("UPDATE offline_cursor_sequence SET next_cursor=? WHERE user_id=?", cursor + 1, userId);
+            markOffline(messageId);
+            return cursor;
+        } catch (DuplicateKeyException duplicate) {
+            Long winner = findOfflineCursor(userId, messageId);
+            if (winner != null) {
+                markOffline(messageId);
+                return winner;
+            }
+            throw duplicate;
+        }
     }
     public Long findOfflineCursor(long userId, String messageId) {
         List<Long> cursors = jdbc.queryForList("SELECT delivery_cursor FROM offline_message_index WHERE user_id=? AND message_id=?", Long.class, userId, messageId);
