@@ -184,11 +184,14 @@ $env:TIM_SERVER_ID='im-server-2'; $env:TIM_NODE_ID='2'; $env:TIM_SERVER_HTTP_POR
 ```powershell
 Invoke-RestMethod http://localhost:8081/demo/messages -Method Post -ContentType application/json -Body '{"fromUserId":1001,"toUserId":1002,"content":"hello"}'
 Invoke-RestMethod 'http://localhost:8082/demo/offline/1002?cursor=0&limit=20'
+Invoke-RestMethod 'http://localhost:8082/demo/offline/1002/ack?cursor=20' -Method Post
 Invoke-RestMethod http://localhost:8081/demo/groups/9/members/1002 -Method Put
 Invoke-RestMethod http://localhost:8081/demo/groups/9/messages -Method Post -ContentType application/json -Body '{"fromUserId":1001,"content":"group hello"}'
 ```
 
 成员少于 `tim.group.write-fanout-limit`（默认 500）时，群聊按成员写扩散；超过阈值时只追加群消息 ZSet，使用 `/demo/groups/{groupId}/messages/{userId}` 按游标读取。离线缓存容量由 `tim.offline.max-size` 控制（默认 1000）。
+
+离线接口返回 `messageId`、`deliveryCursor` 和 `body`。客户端处理完本页中最大的连续游标后，调用 `/demo/offline/{userId}/ack?cursor={deliveryCursor}`，服务端才裁剪 Redis 离线索引；Redis 索引缺失时会按同一游标从 MySQL 回退读取。
 
 推荐阅读顺序：`ObjEncoder/ObjDecoder` → `TIMServerHandle` → `ReliableMessageService` → `RedisRouteService` / `RocketMqNodeMessageBus` → `GroupMessageService`。Netty 负责连接、协议和心跳；ZooKeeper 注册/发现节点；Redis 保存路由、在线、去重和近期离线数据；RocketMQ 转发跨节点消息；MySQL 保存历史及最终幂等约束。
 

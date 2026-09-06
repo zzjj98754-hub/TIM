@@ -16,7 +16,7 @@ public class DemoMessageController {
     private final GroupMessageService groups;
     public DemoMessageController(ReliableMessageService messages, GroupMessageService groups) { this.messages = messages; this.groups = groups; }
     @PostMapping("/messages") public Map<String, String> send(@RequestBody ChatMessage message) { messages.accept(message); return Map.of("status", "accepted", "messageId", message.getMessageId()); }
-    @GetMapping("/offline/{userId}") public List<String> offline(@PathVariable long userId, @RequestParam(defaultValue = "0") long cursor, @RequestParam(defaultValue = "20") int limit) { return messages.pullOffline(userId, cursor, Math.min(limit, 100)); }
+    @GetMapping("/offline/{userId}") public List<com.tuling.tim.server.message.OfflineMessage> offline(@PathVariable long userId, @RequestParam(defaultValue = "0") long cursor, @RequestParam(defaultValue = "20") int limit) { return messages.pullOffline(userId, cursor, Math.min(limit, 100)); }
     @PostMapping("/offline/{userId}/ack") public void offlineAck(@PathVariable long userId, @RequestParam long cursor) { messages.acknowledgeOffline(userId, cursor); }
     @PutMapping("/groups/{groupId}/members/{userId}") public Map<String, String> member(@PathVariable long groupId, @PathVariable long userId) { groups.addMember(groupId, userId); return Map.of("status", "added"); }
     @DeleteMapping("/groups/{groupId}/members/{userId}") public Map<String, String> removeMember(@PathVariable long groupId, @PathVariable long userId) { groups.removeMember(groupId, userId); return Map.of("status", "removed"); }

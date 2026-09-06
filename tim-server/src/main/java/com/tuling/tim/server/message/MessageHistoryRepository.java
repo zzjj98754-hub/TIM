@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Collection;
+import java.util.ArrayList;
 
 /** MySQL/H2 history table. The unique message_id is the durable idempotency guard. */
 @Repository
@@ -40,5 +41,16 @@ public class MessageHistoryRepository {
     }
     public List<String> findOfflineAfter(long userId, long cursor, int limit) {
         return jdbc.queryForList("SELECT m.body FROM offline_message_index i JOIN im_message m ON m.message_id=i.message_id WHERE i.user_id=? AND i.delivery_cursor>? ORDER BY i.delivery_cursor LIMIT ?", String.class, userId, cursor, limit);
+    }
+    public List<OfflineMessage> findOfflineBodies(long userId, Collection<String> messageIds) {
+        if (messageIds == null || messageIds.isEmpty()) return List.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(messageIds.size(), "?"));
+        List<Object> args = new ArrayList<>(); args.add(userId); args.addAll(messageIds);
+        return jdbc.query("SELECT i.message_id, i.delivery_cursor, m.body FROM offline_message_index i JOIN im_message m ON m.message_id=i.message_id WHERE i.user_id=? AND i.message_id IN (" + placeholders + ") ORDER BY i.delivery_cursor",
+                (rs, row) -> new OfflineMessage(rs.getString(1), rs.getLong(2), rs.getString(3)), args.toArray());
+    }
+    public List<OfflineMessage> findOfflineRecordsAfter(long userId, long cursor, int limit) {
+        return jdbc.query("SELECT i.message_id, i.delivery_cursor, m.body FROM offline_message_index i JOIN im_message m ON m.message_id=i.message_id WHERE i.user_id=? AND i.delivery_cursor>? ORDER BY i.delivery_cursor LIMIT ?",
+                (rs, row) -> new OfflineMessage(rs.getString(1), rs.getLong(2), rs.getString(3)), userId, cursor, limit);
     }
 }

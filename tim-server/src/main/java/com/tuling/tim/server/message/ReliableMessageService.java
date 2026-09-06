@@ -115,11 +115,11 @@ public class ReliableMessageService {
             history.insertIfAbsent(message, "OFFLINE");
         } catch (Exception ignored) { history.insertIfAbsent(message, "OFFLINE"); }
     }
-    public List<String> pullOffline(long userId, long cursor, int limit) {
+    public List<OfflineMessage> pullOffline(long userId, long cursor, int limit) {
         String key = "im:offline:" + userId;
         List<String> ids = new ArrayList<>(redis.opsForZSet().rangeByScore(key, cursor + 1, Double.MAX_VALUE, 0, limit));
-        List<String> result = new ArrayList<>(history.findBodies(ids));
-        if (result.size() < limit) result.addAll(history.findOfflineAfter(userId, cursor, limit - result.size()));
+        List<OfflineMessage> result = new ArrayList<>(history.findOfflineBodies(userId, ids));
+        if (result.size() < limit) result.addAll(history.findOfflineRecordsAfter(userId, cursor, limit - result.size()));
         return result;
     }
     /** Advance only after the client has processed the largest continuous cursor. */

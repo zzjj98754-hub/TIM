@@ -42,11 +42,15 @@ class OfflineMessageServiceTest {
         when(zsets.rangeByScore("im:offline:2", 6D, Double.MAX_VALUE, 0, 2))
                 .thenReturn(new java.util.LinkedHashSet<>(java.util.Collections.singletonList("m7")));
         MessageHistoryRepository history = mock(MessageHistoryRepository.class);
-        when(history.findBodies(List.of("m7"))).thenReturn(List.of("body-7"));
+        when(history.findOfflineBodies(2L, java.util.Collections.singletonList("m7")))
+                .thenReturn(java.util.Collections.singletonList(new OfflineMessage("m7", 7L, "body-7")));
         ReliableMessageService service = newService(redis, history, 100);
 
-        assertEquals(List.of("body-7"), service.pullOffline(2L, 5L, 2));
-        verify(history).findBodies(List.of("m7"));
+        java.util.List<OfflineMessage> result = service.pullOffline(2L, 5L, 2);
+        assertEquals(1, result.size());
+        assertEquals("body-7", result.get(0).getBody());
+        assertEquals(7L, result.get(0).getDeliveryCursor());
+        verify(history).findOfflineBodies(2L, java.util.Collections.singletonList("m7"));
     }
 
     private ReliableMessageService newService(StringRedisTemplate redis, MessageHistoryRepository history, int limit) {
