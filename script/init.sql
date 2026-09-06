@@ -36,3 +36,4 @@ CREATE TABLE IF NOT EXISTS message_delivery (
   created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, acked_at TIMESTAMP NULL,
   PRIMARY KEY(message_id, recipient_id)
 );
+CREATE TABLE IF NOT EXISTS offline_user_cursor (user_id BIGINT PRIMARY KEY, confirmed_cursor BIGINT NOT NULL, updated_at TIMESTAMP NOT NULL);

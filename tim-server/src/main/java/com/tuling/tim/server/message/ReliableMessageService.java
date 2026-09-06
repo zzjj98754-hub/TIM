@@ -181,6 +181,8 @@ public class ReliableMessageService {
     /** Advance only after the client has processed the largest continuous cursor. */
     public void acknowledgeOffline(long userId, long cursor) {
         if (cursor <= 0) return;
-        redis.opsForZSet().removeRangeByScore("im:offline:" + userId, Double.NEGATIVE_INFINITY, cursor);
+        if (history.acknowledgeOffline(userId, cursor)) {
+            redis.opsForZSet().removeRangeByScore("im:offline:" + userId, Double.NEGATIVE_INFINITY, cursor);
+        }
     }
 }

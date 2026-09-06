@@ -38,6 +38,16 @@ public class MessageHistoryRepository {
         List<Long> cursors = jdbc.queryForList("SELECT delivery_cursor FROM offline_message_index WHERE user_id=? AND message_id=?", Long.class, userId, messageId);
         return cursors.isEmpty() ? null : cursors.get(0);
     }
+    public boolean acknowledgeOffline(long userId, long cursor) {
+        Long maximum = jdbc.queryForObject("SELECT MAX(delivery_cursor) FROM offline_message_index WHERE user_id=?", Long.class, userId);
+        if (maximum == null || cursor > maximum) return false;
+        int updated = jdbc.update("UPDATE offline_user_cursor SET confirmed_cursor=CASE WHEN confirmed_cursor < ? THEN ? ELSE confirmed_cursor END, updated_at=CURRENT_TIMESTAMP WHERE user_id=?", cursor, cursor, userId);
+        if (updated == 0) {
+            try { jdbc.update("INSERT INTO offline_user_cursor (user_id, confirmed_cursor, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)", userId, cursor); }
+            catch (DuplicateKeyException ignored) { }
+        }
+        return true;
+    }
     public List<String> findBodies(Collection<String> messageIds) {
         if (messageIds == null || messageIds.isEmpty()) return List.of();
         String placeholders = String.join(",", java.util.Collections.nCopies(messageIds.size(), "?"));
