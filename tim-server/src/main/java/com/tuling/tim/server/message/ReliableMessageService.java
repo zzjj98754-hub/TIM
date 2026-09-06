@@ -50,10 +50,17 @@ public class ReliableMessageService {
         if (message.getMessageId() == null || message.getMessageId().isEmpty()) message.setMessageId(ids.nextId());
         if (message.getCreatedAt() == 0) message.setCreatedAt(System.currentTimeMillis());
         if (message.getClientMessageId() == null || message.getClientMessageId().isBlank()) message.setClientMessageId(message.getMessageId());
-        boolean inserted = history.insertIfAbsent(message, "PENDING");
-        if (!inserted) return;
-        redis.opsForValue().setIfAbsent("tim:dedup:message:" + message.getMessageId(), "1", Duration.ofHours(24));
-        outbox.append(message);
+        String dedupKey = "tim:dedup:message:" + message.getMessageId();
+        Boolean firstSeen = redis.opsForValue().setIfAbsent(dedupKey, "1", Duration.ofHours(24));
+        if (Boolean.FALSE.equals(firstSeen)) return;
+        try {
+            boolean inserted = history.insertIfAbsent(message, "PENDING");
+            if (!inserted) return;
+            outbox.append(message);
+        } catch (RuntimeException e) {
+            redis.delete(dedupKey);
+            throw e;
+        }
     }
 
     public void receiveFromNode(ChatMessage message) { deliverLocalOrOffline(message); }

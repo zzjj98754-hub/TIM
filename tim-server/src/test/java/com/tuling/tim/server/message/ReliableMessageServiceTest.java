@@ -6,6 +6,7 @@ import com.tuling.tim.server.util.SessionSocketHolder;
 import io.netty.channel.embedded.EmbeddedChannel;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.*;
@@ -55,6 +56,24 @@ class ReliableMessageServiceTest {
             SessionSocketHolder.remove(channel);
             channel.finishAndReleaseAll();
         }
+    }
+
+    @Test
+    void redisDedupRejectsSecondMessageBeforeDatabase() {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> values = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(values);
+        when(values.setIfAbsent(anyString(), anyString(), any())).thenReturn(true, false);
+        MessageHistoryRepository history = mock(MessageHistoryRepository.class);
+        when(history.insertIfAbsent(any(ChatMessage.class), eq("PENDING"))).thenReturn(true);
+        ReliableMessageService service = new ReliableMessageService(mock(RedisRouteService.class), redis, history,
+                new ObjectMapper(), new SnowflakeIdGenerator(), mock(OutboxRepository.class), 3, 5000L, 100);
+        ChatMessage message = message("dedup-me");
+
+        service.accept(message);
+        service.accept(message);
+
+        verify(history, times(1)).insertIfAbsent(message, "PENDING");
     }
 
     private ReliableMessageService newService(RedisRouteService routes, long retryMs) {
