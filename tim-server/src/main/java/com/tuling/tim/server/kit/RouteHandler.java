@@ -5,7 +5,7 @@ import com.tuling.tim.server.util.SessionSocketHolder;
 import com.tuling.tim.server.route.RedisRouteService;
 import com.tuling.tim.server.util.SpringBeanFactory;
 import com.tuling.tim.server.util.ConnectionSession;
-import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.Channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +26,7 @@ public class RouteHandler {
      * @param channel
      * @throws IOException
      */
-    public void userOffLine(TIMUserInfo userInfo, NioSocketChannel channel) {
+    public void userOffLine(TIMUserInfo userInfo, Channel channel) {
         if (userInfo != null) {
             LOGGER.info("Account [{}] offline", userInfo.getUserName());
             ConnectionSession session = SessionSocketHolder.getSession(channel);

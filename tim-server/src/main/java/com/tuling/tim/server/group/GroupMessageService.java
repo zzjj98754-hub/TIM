@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import com.tuling.tim.server.util.SessionSocketHolder;
-import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.Channel;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -33,16 +33,16 @@ public class GroupMessageService {
         jdbc.update("INSERT INTO im_group (group_id, name, created_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE group_id=group_id", groupId, "group-" + groupId);
         jdbc.update("INSERT INTO group_member (group_id, user_id, joined_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE group_id=group_id", groupId, userId);
         redis.opsForSet().add(membersKey(groupId), String.valueOf(userId));
-        NioSocketChannel channel = SessionSocketHolder.get(userId); if (channel != null) SessionSocketHolder.joinGroup(groupId, channel);
+        Channel channel = SessionSocketHolder.get(userId); if (channel != null) SessionSocketHolder.joinGroup(groupId, channel);
     }
-    public void restoreLocalMembership(long userId, NioSocketChannel channel) {
+    public void restoreLocalMembership(long userId, Channel channel) {
         jdbc.queryForList("SELECT group_id FROM group_member WHERE user_id=?", Long.class, userId)
                 .forEach(groupId -> SessionSocketHolder.joinGroup(groupId, channel));
     }
     public void removeMember(long groupId, long userId) {
         jdbc.update("DELETE FROM group_member WHERE group_id=? AND user_id=?", groupId, userId);
         redis.opsForSet().remove(membersKey(groupId), String.valueOf(userId));
-        NioSocketChannel channel = SessionSocketHolder.get(userId);
+        Channel channel = SessionSocketHolder.get(userId);
         if (channel != null) SessionSocketHolder.leaveGroup(groupId, channel);
     }
     public String send(ChatMessage source) {

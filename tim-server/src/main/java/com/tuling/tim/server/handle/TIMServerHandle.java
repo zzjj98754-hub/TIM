@@ -20,7 +20,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -45,13 +44,13 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         //可能出现业务判断离线后再次触发 channelInactive
-        TIMUserInfo userInfo = SessionSocketHolder.getUserId((NioSocketChannel) ctx.channel());
+        TIMUserInfo userInfo = SessionSocketHolder.getUserId(ctx.channel());
         if (userInfo != null) {
             LOGGER.warn("[{}] trigger channelInactive offline!", userInfo.getUserName());
 
             //Clear route info and offline.
             RouteHandler routeHandler = SpringBeanFactory.getBean(RouteHandler.class);
-            routeHandler.userOffLine(userInfo, (NioSocketChannel) ctx.channel());
+            routeHandler.userOffLine(userInfo, ctx.channel());
 
             ctx.channel().close();
         }
@@ -78,11 +77,11 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
         if (msg.getType() == Constants.CommandType.LOGIN) {
             //保存客户端与 Channel 之间的关系
-            String[] session = SessionSocketHolder.put(msg.getRequestId(), (NioSocketChannel) ctx.channel()).split(":", 2);
+            String[] session = SessionSocketHolder.put(msg.getRequestId(), ctx.channel()).split(":", 2);
             SessionSocketHolder.saveSession(msg.getRequestId(), msg.getReqMsg());
             SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
                     { SpringBeanFactory.getBean(RedisRouteService.class).online(msg.getRequestId(), session[0], Long.parseLong(session[1]));
-                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(msg.getRequestId(), (NioSocketChannel) ctx.channel()); });
+                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(msg.getRequestId(), ctx.channel()); });
             LOGGER.info("client [{}] online success!!", msg.getReqMsg());
         }
 
@@ -101,7 +100,7 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
         }
 
         if (msg.getType() == Constants.CommandType.CHAT || msg.getType() == Constants.CommandType.GROUP_CHAT) {
-            ConnectionSession session = SessionSocketHolder.getSession((NioSocketChannel) ctx.channel());
+            ConnectionSession session = SessionSocketHolder.getSession(ctx.channel());
             if (session == null) { ctx.close(); return; }
             ChatMessage chat = SpringBeanFactory.getBean(ObjectMapper.class).readValue(msg.getReqMsg(), ChatMessage.class);
             trustSessionIdentity(chat, session);

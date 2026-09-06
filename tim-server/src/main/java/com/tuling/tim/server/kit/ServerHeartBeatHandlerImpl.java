@@ -6,7 +6,6 @@ import com.tuling.tim.common.util.NettyAttrUtil;
 import com.tuling.tim.server.config.AppConfiguration;
 import com.tuling.tim.server.util.SessionSocketHolder;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,11 +33,11 @@ public class ServerHeartBeatHandlerImpl implements HeartBeatHandler {
         Long lastReadTime = NettyAttrUtil.getReaderTime(ctx.channel());
         long now = System.currentTimeMillis();
         if (lastReadTime != null && now - lastReadTime > heartBeatTime) {
-            TIMUserInfo userInfo = SessionSocketHolder.getUserId((NioSocketChannel) ctx.channel());
+            TIMUserInfo userInfo = SessionSocketHolder.getUserId(ctx.channel());
             if (userInfo != null) {
                 LOGGER.warn("客户端[{}]心跳超时[{}]ms，需要关闭连接!", userInfo.getUserName(), now - lastReadTime);
             }
-            routeHandler.userOffLine(userInfo, (NioSocketChannel) ctx.channel());
+            routeHandler.userOffLine(userInfo, ctx.channel());
             ctx.channel().close();
         }
     }

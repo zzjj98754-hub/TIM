@@ -6,7 +6,7 @@ import com.tuling.tim.common.protocol.TIMReqMsg;
 import com.tuling.tim.server.mq.NodeMessageBus;
 import com.tuling.tim.server.route.RedisRouteService;
 import com.tuling.tim.server.util.SessionSocketHolder;
-import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.Channel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -63,12 +63,16 @@ public class ReliableMessageService {
         if (routes.serverId().equals(target)) deliverLocalOrOffline(message); else bus.forward(target, message);
     }
     private void deliverLocalOrOffline(ChatMessage message) {
-        NioSocketChannel channel = SessionSocketHolder.get(message.getToUserId());
+        Channel channel = SessionSocketHolder.get(message.getToUserId());
         if (channel == null || !channel.isActive()) { saveOffline(message, "channel offline"); return; }
         try {
-            channel.writeAndFlush(new TIMReqMsg(Long.parseLong(message.getMessageId()), json.writeValueAsString(message), Constants.CommandType.CHAT));
+            channel.writeAndFlush(new TIMReqMsg(requestId(message.getMessageId()), json.writeValueAsString(message), Constants.CommandType.CHAT));
             pending.putIfAbsent(message.getMessageId(), new PendingDelivery(message, System.currentTimeMillis() + retryMs));
         } catch (Exception ex) { saveOffline(message, "push failed"); }
+    }
+    private long requestId(String messageId) {
+        try { return Long.parseLong(messageId); }
+        catch (NumberFormatException ignored) { return Integer.toUnsignedLong(messageId.hashCode()); }
     }
     public void acknowledge(String messageId) {
         pending.remove(messageId);

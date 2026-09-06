@@ -1,21 +1,12 @@
 package com.tuling.tim.server.server;
 
-import com.tuling.tim.common.constant.Constants;
-import com.tuling.tim.common.enums.StatusEnum;
-import com.tuling.tim.common.protocol.TIMReqMsg;
-import com.tuling.tim.common.res.BaseResponse;
-import com.tuling.tim.server.api.vo.req.SendMsgReqVO;
-import com.tuling.tim.server.api.vo.res.SendMsgResVO;
 import com.tuling.tim.server.init.TIMServerInitializer;
-import com.tuling.tim.server.util.SessionSocketHolder;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +15,6 @@ import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.net.InetSocketAddress;
-import java.util.concurrent.TimeUnit;
 
 /**
  * @since JDK 1.8
@@ -76,38 +66,4 @@ public class TIMServer {
         LOGGER.info("Close tim server success!!!");
     }
 
-
-    /**
-     * Push msg to client.
-     *
-     * @param sendMsgReqVO 消息
-     */
-    public BaseResponse<SendMsgResVO> sendMsg(SendMsgReqVO sendMsgReqVO) {
-        NioSocketChannel socketChannel = SessionSocketHolder.get(sendMsgReqVO.getUserId());
-
-        if (socketChannel == null || !socketChannel.isActive()) {
-            LOGGER.error("client {} offline!", sendMsgReqVO.getUserId());
-            BaseResponse<SendMsgResVO> res = new BaseResponse<>();
-            res.setCode(StatusEnum.OFF_LINE.getCode());
-            res.setMessage(StatusEnum.OFF_LINE.getMessage());
-            return res;
-        }
-        TIMReqMsg protocol = new TIMReqMsg(sendMsgReqVO.getUserId(), sendMsgReqVO.getMsg(), Constants.CommandType.MSG);
-
-        ChannelFuture future = socketChannel.writeAndFlush(protocol);
-        if (future == null || !future.awaitUninterruptibly(5, TimeUnit.SECONDS) || !future.isSuccess()) {
-            BaseResponse<SendMsgResVO> res = new BaseResponse<>();
-            res.setCode(StatusEnum.FAIL.getCode());
-            res.setMessage(StatusEnum.FAIL.getMessage());
-            return res;
-        }
-        LOGGER.info("server push msg:[{}]", sendMsgReqVO.toString());
-        BaseResponse<SendMsgResVO> res = new BaseResponse<>();
-        SendMsgResVO sendMsgResVO = new SendMsgResVO();
-        sendMsgResVO.setMsg("OK");
-        res.setCode(StatusEnum.SUCCESS.getCode());
-        res.setMessage(StatusEnum.SUCCESS.getMessage());
-        res.setDataBody(sendMsgResVO);
-        return res;
-    }
 }
