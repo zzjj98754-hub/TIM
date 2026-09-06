@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -44,6 +45,7 @@ public class ReliableMessageService {
     @org.springframework.beans.factory.annotation.Autowired
     void setBus(NodeMessageBus bus) { this.bus = bus; }
 
+    @Transactional
     public void accept(ChatMessage message) {
         if (message.getMessageId() == null || message.getMessageId().isEmpty()) message.setMessageId(ids.nextId());
         if (message.getCreatedAt() == 0) message.setCreatedAt(System.currentTimeMillis());

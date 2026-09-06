@@ -202,6 +202,10 @@ MySQL 为事实来源，Redis `tim:offline:{userId}` 只保存 messageId 和用�
 `group_message_inbox`；RocketMQ 的 `TIM_GROUP_BROADCAST` 使用广播消费模式，
 节点只推送本地 `groupId → Channel集合`。
 
+Gateway 的 `/p2pRoute` 和 `/groupRoute` 仅保留为明确返回弃用提示的兼容接口，
+不会再执行逐用户 HTTP 推送；单聊和群聊必须通过认证后的 Netty `CHAT`/
+`GROUP_CHAT` 帧进入服务端消息链路。
+
 ### 验收
 
 先执行 `./mvnw.cmd package`，再执行 `scripts/smoke-test.ps1`（Linux 使用

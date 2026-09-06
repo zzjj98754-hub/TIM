@@ -70,29 +70,8 @@ public class RouteController implements RouteApi {
     @Override
     public BaseResponse<NULLBody> groupRoute(@Valid @RequestBody ChatReqVO groupReqVO) throws Exception {
         BaseResponse<NULLBody> res = new BaseResponse();
-
-        LOGGER.info("msg=[{}]", groupReqVO.toString());
-
-        //获取所有的推送列表
-        Map<Long, TIMServerResVO> serverResVOMap = accountService.loadRouteRelated();
-        for (Map.Entry<Long, TIMServerResVO> timServerResVOEntry : serverResVOMap.entrySet()) {
-            Long userId = timServerResVOEntry.getKey();
-            TIMServerResVO TIMServerResVO = timServerResVOEntry.getValue();
-            if (userId.equals(groupReqVO.getUserId())) {
-                //过滤掉自己
-                TIMUserInfo timUserInfo = userInfoCacheService.loadUserInfoByUserId(groupReqVO.getUserId());
-                LOGGER.warn("过滤掉了发送者 userId={}", timUserInfo.toString());
-                continue;
-            }
-
-            //推送消息
-            ChatReqVO chatVO = new ChatReqVO(userId, groupReqVO.getMsg());
-            accountService.pushMsg(TIMServerResVO, groupReqVO.getUserId(), chatVO);
-
-        }
-
-        res.setCode(StatusEnum.SUCCESS.getCode());
-        res.setMessage(StatusEnum.SUCCESS.getMessage());
+        res.setCode(StatusEnum.FAIL.getCode());
+        res.setMessage("Deprecated: send GROUP_CHAT through the authenticated Netty connection");
         return res;
     }
 
@@ -108,22 +87,8 @@ public class RouteController implements RouteApi {
     @Override
     public BaseResponse<NULLBody> p2pRoute(@Valid @RequestBody P2PReqVO p2pRequest) throws Exception {
         BaseResponse<NULLBody> res = new BaseResponse();
-
-        try {
-            //获取接收消息用户的路由信息
-            TIMServerResVO TIMServerResVO = accountService.loadRouteRelatedByUserId(p2pRequest.getReceiveUserId());
-
-            //p2pRequest.getReceiveUserId()==>消息接收者的 userID
-            ChatReqVO chatVO = new ChatReqVO(p2pRequest.getReceiveUserId(), p2pRequest.getMsg());
-            accountService.pushMsg(TIMServerResVO, p2pRequest.getUserId(), chatVO);
-
-            res.setCode(StatusEnum.SUCCESS.getCode());
-            res.setMessage(StatusEnum.SUCCESS.getMessage());
-
-        } catch (TIMException e) {
-            res.setCode(e.getErrorCode());
-            res.setMessage(e.getErrorMessage());
-        }
+        res.setCode(StatusEnum.FAIL.getCode());
+        res.setMessage("Deprecated: send CHAT through the authenticated Netty connection");
         return res;
     }
 
