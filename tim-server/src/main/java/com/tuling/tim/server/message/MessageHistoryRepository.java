@@ -18,12 +18,9 @@ public class MessageHistoryRepository {
     public MessageHistoryRepository(JdbcTemplate jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
     public boolean insertIfAbsent(ChatMessage message, String status) {
         try {
-            Integer existing = jdbc.queryForObject("SELECT COUNT(*) FROM im_message WHERE message_id = ? OR (from_user_id = ? AND client_message_id = ?)", Integer.class,
-                    message.getMessageId(), message.getFromUserId(), message.getClientMessageId());
-            if (existing != null && existing > 0) return false;
-            int updated = jdbc.update("INSERT INTO im_message (message_id, client_message_id, from_user_id, to_user_id, group_id, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE message_id = message_id",
+            jdbc.update("INSERT INTO im_message (message_id, client_message_id, from_user_id, to_user_id, group_id, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     message.getMessageId(), message.getClientMessageId(), message.getFromUserId(), message.getToUserId(), message.getGroupId(), json.writeValueAsString(message), status, message.getCreatedAt());
-            return updated > 0;
+            return true;
         } catch (DuplicateKeyException e) { return false; }
         catch (JsonProcessingException e) { throw new IllegalStateException("serialize message", e); }
     }
