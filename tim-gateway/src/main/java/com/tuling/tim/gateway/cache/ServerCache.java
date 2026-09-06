@@ -5,6 +5,7 @@ import com.tuling.tim.gateway.kit.ZKit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ public class ServerCache {
     private LoadingCache<String, String> cache;
 
     @Autowired
+    @Lazy
     private ZKit zkUtil;
 
     public void addCache(String key) {
