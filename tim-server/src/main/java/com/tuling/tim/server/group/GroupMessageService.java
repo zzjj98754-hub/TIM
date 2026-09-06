@@ -66,7 +66,16 @@ public class GroupMessageService {
     public List<String> pull(long groupId, long userId, long cursor, int limit) {
         if (!Boolean.TRUE.equals(redis.opsForSet().isMember(membersKey(groupId), String.valueOf(userId)))) throw new IllegalArgumentException("user is not a group member");
         List<String> ids = new ArrayList<>(redis.opsForZSet().rangeByScore("im:group:messages:" + groupId, cursor + 1, Double.MAX_VALUE, 0, limit));
-        if (ids.isEmpty()) ids = jdbc.queryForList("SELECT gm.message_id FROM group_message_inbox i JOIN group_message gm ON gm.message_id=i.message_id WHERE i.group_id=? AND i.user_id=? AND gm.group_sequence>? ORDER BY gm.group_sequence LIMIT ?", String.class, groupId, userId, cursor, limit);
+        if (ids.isEmpty()) {
+            Long memberCount = redis.opsForSet().size(membersKey(groupId));
+            if (memberCount != null && memberCount >= writeFanoutLimit) {
+                // Large groups have no per-member inbox rows. MySQL remains
+                // the durable source when the Redis read index is incomplete.
+                ids = jdbc.queryForList("SELECT message_id FROM group_message WHERE group_id=? AND group_sequence>? ORDER BY group_sequence LIMIT ?", String.class, groupId, cursor, limit);
+            } else {
+                ids = jdbc.queryForList("SELECT gm.message_id FROM group_message_inbox i JOIN group_message gm ON gm.message_id=i.message_id WHERE i.group_id=? AND i.user_id=? AND gm.group_sequence>? ORDER BY gm.group_sequence LIMIT ?", String.class, groupId, userId, cursor, limit);
+            }
+        }
         List<String> bodies = loadBodies(ids, groupId);
         return bodies;
     }
