@@ -33,15 +33,6 @@ public interface AccountService {
     StatusEnum login(LoginReqVO loginReqVO) throws Exception;
 
     /**
-     * 保存路由信息
-     *
-     * @param msg        服务器信息
-     * @param loginReqVO 用户信息
-     * @throws Exception
-     */
-    void saveRouteInfo(LoginReqVO loginReqVO, String msg) throws Exception;
-
-    /**
      * 加载所有用户的路有关系
      *
      * @return 所有的路由关系

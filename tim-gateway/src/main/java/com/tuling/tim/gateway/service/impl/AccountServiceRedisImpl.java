@@ -84,15 +84,6 @@ public class AccountServiceRedisImpl implements AccountService {
     }
 
     @Override
-    public void saveRouteInfo(LoginReqVO loginReqVO, String msg) throws Exception {
-        String key = ROUTE_PREFIX + loginReqVO.getUserId();
-        Map<String, String> route = new HashMap<>();
-        route.put("route", msg); route.put("nodeId", "pending");
-        route.put("sessionId", "gateway-login"); route.put("epoch", String.valueOf(System.currentTimeMillis()));
-        redisTemplate.opsForHash().putAll(key, route);
-    }
-
-    @Override
     public Map<Long, TIMServerResVO> loadRouteRelated() {
 
         Map<Long, TIMServerResVO> routes = new HashMap<>(64);

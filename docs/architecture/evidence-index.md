@@ -6,7 +6,7 @@
 |---|---|---|---|
 | E-BOOT | `tim-server/.../server/TIMServer.java` | Netty boss/worker bind 与优雅关闭 | CONFIRMED |
 | E-ZK | `tim-server/.../kit/RegistryZK.java`, Gateway `ZKit` | `/im/servers/{serverId}` 临时节点与 child watch | CONFIRMED |
-| E-LOGIN | Gateway `RouteController`, `AccountServiceRedisImpl` | 登录校验账号、选择节点、返回 TCP 地址 | CONFIRMED |
+| E-LOGIN | Gateway `RouteController`, `AccountServiceRedisImpl` | 登录校验账号、选择节点、返回 TCP 地址；不提前写用户路由 | CONFIRMED |
 | E-BIND | `TIMServerHandle`, `SessionSocketHolder`, `RedisRouteService` | 会话绑定本地 Channel，统一写入 route Hash，旧连接比较清理 | CONFIRMED |
 | E-FRAME | `tim-common/.../ObjEncoder.java`, `ObjDecoder.java` | TIM1、18-byte header、LengthField 参数和拆包测试 | CONFIRMED |
 | E-HEART | server/client `*Initializer.java`, `*Handle.java` | IdleStateHandler、PING/PONG、断开清理 | CONFIRMED |

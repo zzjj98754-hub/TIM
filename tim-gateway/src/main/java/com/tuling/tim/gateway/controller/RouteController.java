@@ -138,9 +138,6 @@ public class RouteController implements RouteApi {
             RouteInfo routeInfo = RouteInfoParseUtil.parse(server);
             commonBizService.checkServerAvailable(routeInfo);
 
-            //保存路由信息
-            accountService.saveRouteInfo(loginReqVO, server);
-
             TIMServerResVO vo = new TIMServerResVO(routeInfo);
             res.setDataBody(vo);
 

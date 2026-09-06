@@ -27,7 +27,6 @@ public class RedisRouteService {
         redis.expire(key, Duration.ofHours(24));
         redis.opsForValue().set("tim:presence:user:" + userId, "1", Duration.ofHours(24));
     }
-    public void online(long userId) { online(userId, "legacy", System.currentTimeMillis()); }
     public void offline(long userId, String sessionId, long epoch) {
         String key = routeKey(userId);
         String currentSession = (String) redis.opsForHash().get(key, "sessionId");

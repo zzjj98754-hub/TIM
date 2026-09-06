@@ -5,7 +5,7 @@
 | Netty 长连接、协议、心跳 | IMPLEMENTED | `TIMServer`, `TIMServerInitializer`, `ObjDecoder/ObjEncoder`, `IdleStateHandler`; 连接和中间件运行态待 Compose 验证 |
 | 认证身份与旧连接保护 | IMPLEMENTED | `TIMServerHandle`, `ConnectionSession`, `SessionSocketHolder`, `RedisRouteService`; 业务帧必须先有会话，清理按 session/epoch 匹配 |
 | ZooKeeper 注册/Watch | IMPLEMENTED | `RegistryZK`, `ZKit`, Gateway `ServerCache`; `/tim/nodes/{nodeId}` 临时节点，根节点并发创建有保护 |
-| Redis 用户路由 | IMPLEMENTED | `tim:route:user:{userId}` Hash；节点、session、epoch、route 统一写入并用匹配删除 |
+| Redis 用户路由 | IMPLEMENTED | Gateway 登录只返回候选节点；仅已认证 Netty Session 写入 `tim:route:user:{userId}` Hash，节点、session、epoch、route 用匹配删除 |
 | 单聊可靠投递 | IMPLEMENTED | `ReliableMessageService`、MySQL `im_message/outbox_event`、RocketMQ node topic、目标节点本地 Channel、ACK/重试 |
 | Outbox 并发 Relay | IMPLEMENTED | `OutboxRepository.claimPending` 使用短租约 `PROCESSING`；过期重试，超限进入 `DEAD` |
 | 服务端幂等 | IMPLEMENTED | Redis 快速去重 + MySQL `message_id` 与 `(from_user_id, client_message_id)` 唯一约束 |
