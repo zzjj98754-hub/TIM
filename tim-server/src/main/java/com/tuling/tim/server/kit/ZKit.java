@@ -32,8 +32,14 @@ public class ZKit {
             return;
         }
 
-        //创建 root
-        zkClient.createPersistent(appConfiguration.getZkRoot());
+        // Multiple TIM nodes can start concurrently. Treat a create race as
+        // success only after confirming another node created the same root.
+        try {
+            zkClient.createPersistent(appConfiguration.getZkRoot());
+        } catch (RuntimeException createRace) {
+            if (!zkClient.exists(appConfiguration.getZkRoot())) throw createRace;
+            logger.debug("Zookeeper root was created concurrently: {}", appConfiguration.getZkRoot());
+        }
     }
 
     /**
