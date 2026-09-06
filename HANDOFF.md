@@ -76,7 +76,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
 - `docker info`: Docker Desktop Linux daemon was available during the latest attempt.
-- `scripts/smoke-test.ps1`: latest run passed with `TIM_MYSQL_PORT=13306`; both TIM nodes and all middleware became healthy, and the script's durable offline idempotency and cross-node group persistence assertions passed.
+- `scripts/smoke-test.ps1`: latest run passed with `TIM_MYSQL_PORT=13306`; both TIM nodes and all middleware became healthy, and the script's durable offline idempotency, cross-node group persistence, and persisted-message-after-node-restart assertions passed.
 
 ## Known blockers / boundaries
 - Existing working tree contains extensive user modifications; do not reset or discard them.
