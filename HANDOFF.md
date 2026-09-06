@@ -90,4 +90,5 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 ## Enterprise reliability v2 continuation
 - Commits: `cf19271`, `f48832b`, `1313c7d`, `f38cd25`, `beb875f`, `0bf868a`, `1fee929`.
 - Latest full Maven test, verify, Compose config, and diff-check passed after these changes.
-- Remaining: database lease claiming/recovery for Delivery, server-side offline ACK upper-bound validation and Redis projection rebuild, then Docker two-node failure-injection acceptance.
+- Added database conditional lease claiming/recovery for due `message_delivery` rows and persisted server-side offline ACK upper-bound state in migration `V3__offline_ack_cursor.sql`.
+- Remaining: Redis offline projection rebuild after cache loss and Docker two-node failure-injection acceptance; runtime middleware validation is still unverified because the base image pull previously timed out.
