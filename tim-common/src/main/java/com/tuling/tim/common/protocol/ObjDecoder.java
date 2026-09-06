@@ -21,7 +21,7 @@ public class ObjDecoder extends MessageToMessageDecoder<ByteBuf> {
         byte type = in.readByte();
         long requestId = in.readLong();
         int dataLength = in.readInt();
-        if (magic != ObjEncoder.MAGIC || version != ObjEncoder.VERSION || dataLength < 0 || dataLength > MAX_FRAME_LENGTH || in.readableBytes() != dataLength) {
+        if (magic != ObjEncoder.MAGIC || version != ObjEncoder.VERSION || dataLength <= 0 || dataLength > MAX_FRAME_LENGTH || in.readableBytes() != dataLength) {
             ctx.close();
             return;
         }

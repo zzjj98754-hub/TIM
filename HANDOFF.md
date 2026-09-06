@@ -31,6 +31,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - Added `GroupFanoutStrategySelector` with a tested threshold boundary so write/read fanout selection has one explicit entry point.
 - Tightened business-frame authentication to require both a session and the current `userId -> Channel` binding, rejecting replaced old Channels.
 - Extracted and tested client reconnect backoff: 1/2/4/8/16/30 second exponential base, capped at 30 seconds with jitter.
+- Hardened `ObjDecoder` to reject empty bodies and added EmbeddedChannel coverage for invalid magic/version, negative/oversized lengths, split frames, and coalesced frames.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -58,6 +59,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=GroupFanoutStrategySelectorTest,GroupChannelPushServiceTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=TIMServerHandleTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
 - `./mvnw.cmd -q -pl tim-client -am -Dtest=ReconnectBackoffTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
+- `./mvnw.cmd -q -pl tim-common -Dtest=TIMFrameCodecTest test`: latest run exited 0.
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
 - `docker version`: Docker CLI could not connect to the Docker Desktop Linux daemon, so `scripts/smoke-test.ps1` was not claimed as passed.

@@ -2,7 +2,7 @@
 
 | 能力 | 状态 | 代码证据与边界 |
 |---|---|---|
-| Netty 长连接、协议、心跳 | IMPLEMENTED | `TIMServer`, `TIMServerInitializer`, `ObjDecoder/ObjEncoder`, `IdleStateHandler`; 连接和中间件运行态待 Compose 验证 |
+| Netty 长连接、协议、心跳 | IMPLEMENTED | `TIMServer`, `TIMServerInitializer`, `ObjDecoder/ObjEncoder`, `IdleStateHandler`; EmbeddedChannel 覆盖半包/粘包、非法魔数/版本、负/超大长度和空体 |
 | 客户端重连退避 | IMPLEMENTED | `ReconnectBackoff` 提供 1/2/4/8/16/30 秒指数基线和抖动，`ReConnectManager` 调度执行 |
 | 认证身份与旧连接保护 | IMPLEMENTED | `TIMServerHandle` 同时校验会话和当前 Channel，`SessionSocketHolder`/`RedisRouteService` 按 session/epoch 清理；旧 Channel 不能继续发业务帧 |
 | ZooKeeper 注册/Watch | IMPLEMENTED | `RegistryZK`, `ZKit`, Gateway `ServerCache`; `/tim/nodes/{nodeId}` 临时节点，根节点并发创建有保护 |
