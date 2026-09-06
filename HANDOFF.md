@@ -84,7 +84,8 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - `docker compose config`: latest run exited 0 after correcting the container healthcheck command.
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
-- `docker info`: Docker Desktop Linux daemon was available for the prior smoke run, but stopped during the latest image rebuild; the current Docker API pipe is unavailable.
+- GitHub Actions `build-and-test` passed for commit `d365492` (run `34033585445`, job `101487506968`).
+- `docker info`: Docker Desktop 4.87.0 Linux daemon was available for the prior smoke run, but is currently unavailable. A clean application-process restart reproduces `sailor-ingest.sock: bind: Only one usage of each socket address ...`, before the engine/API pipe is created. No Docker data reset was attempted.
 - `scripts/smoke-test.ps1`: latest run passed with `TIM_MYSQL_PORT=13306`; both TIM nodes and all middleware became healthy, and the script's durable offline idempotency, cross-node group persistence, and persisted-message-after-node-restart assertions passed.
 
 ## Known blockers / boundaries
@@ -93,6 +94,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - Real TCP client-to-client delivery, node-kill recovery, Redis/RocketMQ fault injection, and online RocketMQ broadcast consumption remain unverified.
 - The HTTP smoke assertions prove shared durable persistence paths, but do not replace the pending TCP/middleware failure scenarios.
 - The latest real-client attempt proved Gateway account registration after the validation fix, then exposed and fixed fresh-ZooKeeper parent creation plus the client reconnect-null bug. Docker stopped before the rebuilt nodes could be re-tested, so this is not TCP delivery evidence.
+- Current host-only blocker: Docker Desktop 4.87.0 crashes while binding its internal `sailor-ingest.sock`. Docker 4.89 release notes describe a Windows startup fix for a stuck socket left by an ungraceful shutdown. Updating Docker Desktop or rebooting Windows requires user authority; until then, Compose/TCP/fault-injection acceptance cannot resume on this host.
 
 ## Next actions
 1. Run a real two-client Netty acceptance against the Compose nodes.
