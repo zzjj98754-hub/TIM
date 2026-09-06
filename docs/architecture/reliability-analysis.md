@@ -12,7 +12,7 @@ MySQL 是正文和最终幂等事实来源；Redis 只负责快速去重、路�
 
 ## 路由与连接故障
 
-路由唯一使用 `tim:route:user:{userId}` Hash，包含 nodeId/sessionId/epoch/route 并带 TTL。断线删除使用 Lua/条件匹配语义；旧 Channel 的断开事件不能删除新 Channel 的路由。ZooKeeper 临时节点消失后 Gateway 刷新节点快照；中间件不可用的运行态行为仍需 Compose 故障注入验证。
+路由唯一使用 `tim:route:user:{userId}` Hash，包含 nodeId/sessionId/epoch/route 并带 TTL。断线删除使用 Lua/条件匹配语义；旧 Channel 的断开事件不能删除新 Channel 的路由。ZooKeeper 临时节点消失后 Gateway 刷新节点快照；基础 Compose 健康检查已通过，Redis/MQ/ZK 故障注入和业务消息恢复仍需专用验收脚本验证。
 
 ## 群消息
 
@@ -20,4 +20,4 @@ MySQL 是正文和最终幂等事实来源；Redis 只负责快速去重、路�
 
 ## 已验证与未验证
 
-源码级链路、单元测试、Maven 构建和 Compose 静态配置已验证。Docker daemon 当前不可连接，因此 Redis/MySQL/ZooKeeper/RocketMQ 的真实连接、跨节点私聊、广播消费和故障恢复不能声明已通过。
+源码级链路、单元测试、Maven 构建、Compose 静态配置及基础双节点健康检查已验证。跨节点私聊、广播消费、节点宕机恢复和故障注入尚未由自动化脚本证明。
