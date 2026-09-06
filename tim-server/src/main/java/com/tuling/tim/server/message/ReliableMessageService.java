@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 
 /** Main learning path: route -> node transport -> local push -> ACK -> bounded retry/offline. */
 @Service
@@ -35,6 +36,7 @@ public class ReliableMessageService {
     private final long retryMs;
     private final int offlineLimit;
     private final int outboxMaxRetries;
+    private final String deliveryWorkerId = UUID.randomUUID().toString();
 
     public ReliableMessageService(RedisRouteService routes, StringRedisTemplate redis, MessageHistoryRepository history,
                                   ObjectMapper json, SnowflakeIdGenerator ids, OutboxRepository outbox,
@@ -121,6 +123,11 @@ public class ReliableMessageService {
             delivery.incrementAttempts(now + retryMs);
             dispatch(delivery.getMessage());
         });
+        if (deliveries != null) {
+            for (DeliveryRepository.DeliveryCandidate candidate : deliveries.claimDue(100, deliveryWorkerId, retryMs + 60_000L)) {
+                if (!pending.containsKey(candidate.messageId())) dispatch(deliveries.readMessage(candidate));
+            }
+        }
     }
 
     @Scheduled(fixedDelayString = "${tim.outbox.scan-ms:1000}")
