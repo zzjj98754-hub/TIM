@@ -100,13 +100,18 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
             });
         }
 
-        if (msg.getType() == Constants.CommandType.CHAT) {
+        if (msg.getType() == Constants.CommandType.CHAT || msg.getType() == Constants.CommandType.GROUP_CHAT) {
             ConnectionSession session = SessionSocketHolder.getSession((NioSocketChannel) ctx.channel());
             if (session == null) { ctx.close(); return; }
             ChatMessage chat = SpringBeanFactory.getBean(ObjectMapper.class).readValue(msg.getReqMsg(), ChatMessage.class);
             chat.setFromUserId(session.getUserId());
-            SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
-                    SpringBeanFactory.getBean(ReliableMessageService.class).accept(chat));
+            SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() -> {
+                if (msg.getType() == Constants.CommandType.GROUP_CHAT) {
+                    SpringBeanFactory.getBean(com.tuling.tim.server.group.GroupMessageService.class).send(chat);
+                } else {
+                    SpringBeanFactory.getBean(ReliableMessageService.class).accept(chat);
+                }
+            });
         }
 
         if (msg.getType() == Constants.CommandType.ACK) {
