@@ -41,8 +41,8 @@ public class DeliveryRepository {
                         "AND (d.lease_until IS NULL OR d.lease_until <= CURRENT_TIMESTAMP) ORDER BY d.next_retry_at LIMIT ?",
                 (rs, row) -> new DeliveryCandidate(rs.getString(1), rs.getLong(2), rs.getString(3)), limit);
         for (DeliveryCandidate candidate : candidates) {
-            int updated = jdbc.update("UPDATE message_delivery SET lease_owner=?, lease_until=DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 60 SECOND), updated_at=CURRENT_TIMESTAMP WHERE message_id=? AND recipient_id=? AND status IN ('PENDING','DELIVERING') AND (lease_until IS NULL OR lease_until <= CURRENT_TIMESTAMP)",
-                    owner, candidate.messageId(), candidate.recipientId());
+            int updated = jdbc.update("UPDATE message_delivery SET lease_owner=?, lease_until=DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? SECOND), updated_at=CURRENT_TIMESTAMP WHERE message_id=? AND recipient_id=? AND status IN ('PENDING','DELIVERING') AND (lease_until IS NULL OR lease_until <= CURRENT_TIMESTAMP)",
+                    Math.max(1L, leaseMs / 1000L), owner, candidate.messageId(), candidate.recipientId());
             if (updated == 1) claimed.add(candidate);
         }
         return claimed;

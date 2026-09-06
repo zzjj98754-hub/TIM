@@ -25,6 +25,9 @@ public class MessageHistoryRepository {
         catch (JsonProcessingException e) { throw new IllegalStateException("serialize message", e); }
     }
     public void updateStatus(String id, String status) { jdbc.update("UPDATE im_message SET status = ? WHERE message_id = ?", status, id); }
+    public void markOffline(String id) {
+        jdbc.update("UPDATE im_message SET status='OFFLINE' WHERE message_id=? AND status IN ('PENDING','ROUTING','DELIVERING')", id);
+    }
     public List<String> findAfter(long userId, long after, int limit) {
         return jdbc.queryForList("SELECT body FROM im_message WHERE to_user_id = ? AND created_at > ? ORDER BY created_at LIMIT ?", String.class, userId, after, limit);
     }

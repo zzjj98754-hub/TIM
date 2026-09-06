@@ -172,6 +172,7 @@ public class ReliableMessageService {
             if (size != null && size > offlineLimit) redis.opsForZSet().removeRange(key, 0, size - offlineLimit - 1);
             history.insertIfAbsent(message, "OFFLINE");
         } catch (Exception ignored) { history.insertIfAbsent(message, "OFFLINE"); }
+        history.markOffline(message.getMessageId());
         if (deliveries != null) deliveries.markOffline(message.getMessageId(), message.getToUserId());
     }
     public List<OfflineMessage> pullOffline(long userId, long cursor, int limit) {
