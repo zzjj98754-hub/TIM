@@ -137,7 +137,14 @@ public class ReliableMessageService {
         String key = "im:offline:" + userId;
         List<String> ids = new ArrayList<>(redis.opsForZSet().rangeByScore(key, cursor + 1, Double.MAX_VALUE, 0, limit));
         List<OfflineMessage> result = new ArrayList<>(history.findOfflineBodies(userId, ids));
-        if (result.size() < limit) result.addAll(history.findOfflineRecordsAfter(userId, cursor, limit - result.size()));
+        if (result.size() < limit) {
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (OfflineMessage message : result) seen.add(message.getMessageId());
+            for (OfflineMessage message : history.findOfflineRecordsAfter(userId, cursor, limit)) {
+                if (seen.add(message.getMessageId())) result.add(message);
+                if (result.size() >= limit) break;
+            }
+        }
         return result;
     }
     /** Advance only after the client has processed the largest continuous cursor. */
