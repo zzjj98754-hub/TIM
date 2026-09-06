@@ -135,7 +135,8 @@ public class ReliableMessageService {
         for (OutboxRepository.OutboxEvent event : outbox.claimPending(100)) {
             try {
                 ChatMessage message = json.readValue(event.payload(), ChatMessage.class);
-                dispatch(message);
+                if ("GROUP_MESSAGE_CREATED".equals(event.eventType())) bus.broadcastGroup(message);
+                else dispatch(message);
                 outbox.sent(event.eventId());
             } catch (Exception e) {
                 outbox.retry(event.eventId(), e.getClass().getSimpleName(), outboxMaxRetries);

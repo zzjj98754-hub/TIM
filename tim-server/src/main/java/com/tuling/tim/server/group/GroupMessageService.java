@@ -3,6 +3,7 @@ package com.tuling.tim.server.group;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tuling.tim.server.message.ChatMessage;
 import com.tuling.tim.server.message.ReliableMessageService;
+import com.tuling.tim.server.message.OutboxRepository;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.tuling.tim.server.mq.NodeMessageBus;
@@ -22,11 +23,11 @@ public class GroupMessageService {
     private final StringRedisTemplate redis;
     private final ObjectMapper json;
     private final JdbcTemplate jdbc;
-    private final NodeMessageBus bus;
+    private final OutboxRepository outbox;
     private final GroupFanoutStrategySelector strategySelector;
-    public GroupMessageService(StringRedisTemplate redis, ReliableMessageService messages, ObjectMapper json, JdbcTemplate jdbc, NodeMessageBus bus,
+    public GroupMessageService(StringRedisTemplate redis, ReliableMessageService messages, ObjectMapper json, JdbcTemplate jdbc, NodeMessageBus bus, OutboxRepository outbox,
                                GroupFanoutStrategySelector strategySelector) {
-        this.redis = redis; this.json = json; this.jdbc = jdbc; this.bus = bus; this.strategySelector = strategySelector;
+        this.redis = redis; this.json = json; this.jdbc = jdbc; this.outbox = outbox; this.strategySelector = strategySelector;
     }
     public void addMember(long groupId, long userId) {
         jdbc.update("INSERT INTO im_group (group_id, name, created_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE group_id=group_id", groupId, "group-" + groupId);
@@ -54,12 +55,12 @@ public class GroupMessageService {
         jdbc.update("INSERT INTO group_message (message_id, group_id, group_sequence, sender_id, content, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", messageId, source.getGroupId(), sequence, source.getFromUserId(), source.getContent());
         if (strategySelector.select(members.size()) == GroupFanoutStrategy.WRITE) {
             for (Long member : members) jdbc.update("INSERT INTO group_message_inbox (group_id, user_id, message_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", source.getGroupId(), member, messageId);
-            bus.broadcastGroup(source);
+            outbox.appendGroup(source);
             return "WRITE_FANOUT";
         }
         try {
             redis.opsForZSet().add("im:group:messages:" + source.getGroupId(), messageId, sequence);
-            bus.broadcastGroup(source);
+            outbox.appendGroup(source);
             return "READ_FANOUT";
         } catch (Exception e) { throw new IllegalStateException("store group message", e); }
     }
