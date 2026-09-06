@@ -1,7 +1,7 @@
 # TIM implementation handoff
 
 ## Current phase
-Resume-alignment implementation and documentation complete locally; middleware smoke test attempted but blocked by Docker Hub image authorization/network access.
+Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; authentication, route renewal, durable delivery records, and continuous offline cursors are implemented and tested locally.
 
 ## Completed in this phase
 - Audited the existing multi-module Java 17 TIM project and preserved all pre-existing user changes.
@@ -35,6 +35,10 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - Added health checks for Redis, MySQL, ZooKeeper, RocketMQ NameServer/Broker and health-gated dependencies for both TIM nodes in Compose.
 - Added configurable 64 KiB default business-content validation at the Netty handler before persistence, routing, or MQ work.
 - Corrected TIM Compose health checks to use the `curl` binary installed by `Dockerfile.tim-server` instead of unavailable `wget`.
+- Added short-lived HMAC-SHA256 Gateway-to-Netty connect tokens bound to user, serverId, expiry, and nonce.
+- Added durable `message_delivery` records and recipient-scoped conditional ACK updates; the JVM pending map remains only an acceleration cache.
+- Added authenticated-session checks for ACK frames and atomic route renewal on heartbeat outside the Netty EventLoop.
+- Added durable offline cursor reuse and a client continuous-prefix cursor store with optional atomic local-file persistence.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -82,3 +86,8 @@ Resume-alignment implementation and documentation complete locally; middleware s
 1. In an environment with Docker Hub access or a locally cached `eclipse-temurin:17-jre-jammy`, run `./mvnw.cmd package` and `scripts/smoke-test.ps1`.
 2. Verify two-node RocketMQ private delivery, broadcast fanout, Redis route ownership, MySQL Flyway startup, and offline replay against the Compose stack.
 3. Do not claim the Docker smoke test passed until those runtime checks produce evidence.
+
+## Enterprise reliability v2 continuation
+- Commits: `cf19271`, `f48832b`, `1313c7d`, `f38cd25`, `beb875f`, `0bf868a`, `1fee929`.
+- Latest full Maven test, verify, Compose config, and diff-check passed after these changes.
+- Remaining: database lease claiming/recovery for Delivery, server-side offline ACK upper-bound validation and Redis projection rebuild, then Docker two-node failure-injection acceptance.
