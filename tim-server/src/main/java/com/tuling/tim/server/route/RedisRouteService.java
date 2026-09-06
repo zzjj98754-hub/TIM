@@ -37,7 +37,6 @@ public class RedisRouteService {
             redis.delete("tim:presence:user:" + userId);
         }
     }
-    public void offline(long userId) { redis.delete(routeKey(userId)); redis.delete("tim:presence:user:" + userId); }
     public String findServer(long userId) { return (String) redis.opsForHash().get(routeKey(userId), "nodeId"); }
     public String serverId() { return serverId; }
     private String routeKey(long userId) { return "tim:route:user:" + userId; }
