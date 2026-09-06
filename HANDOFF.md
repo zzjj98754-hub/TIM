@@ -5,7 +5,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 
 ## Completed in this phase
 - Audited the existing multi-module Java 17 TIM project and preserved all pre-existing user changes.
-- Confirmed the current Maven test suite passes: 102 tests, 0 failures, 0 errors, 0 skips.
+- Confirmed the current Maven test suite passes: 105 tests, 0 failures, 0 errors, 0 skips.
 - Confirmed `docker compose config` succeeds.
 - Added Actuator health/metrics exposure to `tim-server`.
 - Added two separately configured TIM service containers to Compose with distinct node IDs, HTTP ports, and Netty ports.
@@ -49,6 +49,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - Made restart recovery honor persisted delivery attempt counts and transition exhausted online delivery to OFFLINE instead of retrying forever.
 - Added database-backed Delivery/Outbox backlog gauges and group fanout duration timing.
 - Changed ordinary-group Inbox writes to JDBC batches; group message/Inbox/Outbox rollback and concurrent sequence allocation now have transaction-level tests. Large-group reads use MySQL as the authoritative source when Redis projection is unavailable.
+- Added Flyway V4/V5: recipient-scoped `im_message` ACK timestamps and database-owned per-user offline cursor allocation. Redis is now only the offline ZSet projection, and concurrent duplicate message IDs reuse one durable cursor.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -60,13 +61,13 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - `HANDOFF.md`
 
 ## Database and messaging status
-- `im_message`, `outbox_event`, offline index, group, member, sequence, group-message, inbox, and member-cursor tables are defined in `schema.sql`, `script/init.sql`, and Flyway `V1__tim_core.sql`.
+- `im_message`, `outbox_event`, offline index/sequence, group, member, sequence, group-message, inbox, member-cursor, and delivery tables are defined in `schema.sql`, `script/init.sql`, and Flyway V1-V5 migrations.
 - `tim.mq.mode=rocketmq` uses a node-targeted RocketMQ topic and a separate `BROADCASTING` group topic so every active node receives group broadcasts; `local` remains the no-broker development fallback.
 - Redis route Hash is `tim:route:user:{userId}`; offline ZSet is `im:offline:{userId}` with messageId members and per-user delivery cursors.
 
 ## Validation
 - `./mvnw.cmd test`: latest run exited 0; 93 tests, 0 failures, 0 errors, 0 skipped.
-- `./mvnw.cmd verify`: latest run exited 0 after the Delivery lease, reliability metrics, and transactional group-fanout fixes (102 tests).
+- `./mvnw.cmd verify`: latest run exited 0 after the Delivery lease, conditional ACK, database offline cursor, reliability metrics, and transactional group-fanout fixes (105 tests).
 - `docker compose config`: latest run exited 0.
 - `./mvnw.cmd -q verify -DskipTests`: latest run exited 0.
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=BeanConfigTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
