@@ -39,6 +39,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - Added durable `message_delivery` records and recipient-scoped conditional ACK updates; the JVM pending map remains only an acceleration cache.
 - Added authenticated-session checks for ACK frames and atomic route renewal on heartbeat outside the Netty EventLoop.
 - Added durable offline cursor reuse and a client continuous-prefix cursor store with optional atomic local-file persistence.
+- Changed group broadcast publication to `GROUP_MESSAGE_CREATED` through the transactional Outbox; Relay broadcasts only after commit.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
