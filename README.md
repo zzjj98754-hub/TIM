@@ -13,7 +13,7 @@
 
 - `TIM` 中的各个组件均采用 `SpringBoot` 构建。
 - 采用 `Netty` 构建底层通信。
-- `Redis` 存放各个客户端的路由信息、账号信息、在线状态等。
+- `Redis` 存放账号、在线状态、统一用户路由、幂等键和近期离线索引；用户路由只由认证后的 Netty Session 写入。
 - `Zookeeper` 用于 `IM-server` 服务的注册与发现。
 - 认证这块逻辑只做了简单实现
 
@@ -36,20 +36,20 @@
 ![](http://assets.processon.com/chart_image/611bb33a1efad412479f7157.png)
 
 - 客户端向 `gateway` 发起登录。
-- 登录成功从 `Zookeeper` 中选择可用 `IM-server` 返回给客户端，并保存登录、路由信息到 `Redis`。
+- 登录成功从 `Zookeeper` 中选择可用 `IM-server` 返回给客户端；客户端随后建立 TCP LOGIN，只有认证成功的 Netty Session 才会把用户路由写入 Redis。
 - 客户端向 `IM-server` 发起长连接，成功后保持心跳。
 - 客户端下线时通过 `gateway` 清除状态信息。
 
 ## 快速启动
 
-当前仓库仍是教学型原型，但已经整理出最小可复现启动基线。
+当前仓库已将可靠单聊、离线消息和群扩散接入统一 TCP 主链路，并提供双节点 Compose 验收基线。
 
 ### 基础设施
 
-先启动 `Redis` 和 `Zookeeper`：
+推荐直接启动完整依赖和两个 TIM 节点：
 
 ```bash
-docker compose up -d redis zookeeper
+docker compose up -d --build
 ```
 
 默认端口如下：
@@ -63,7 +63,7 @@ docker compose up -d redis zookeeper
 
 ### 本地运行
 
-基础设施就绪后，按以下顺序启动：
+如果需要本地调试单个模块，先确保 Redis、MySQL、ZooKeeper 和 RocketMQ 可用，再按以下顺序启动：
 
 ```bash
 ./mvnw spring-boot:run -pl tim-server
@@ -142,7 +142,7 @@ curl -X POST --header 'Content-Type: application/json' --header 'Accept: applica
 
 #### 群聊
 
-群聊只需要在控制台里输入消息回车后即可发送，同时所有在线客户端都可收到消息。
+群聊通过认证后的 TCP `GROUP_CHAT` 帧发送；普通群使用写扩散，超大群使用读扩散，在线成员由各节点本地 Channel 集合批量推送。
 
 #### 私聊
 
@@ -152,7 +152,7 @@ curl -X POST --header 'Content-Type: application/json' --header 'Accept: applica
 
 接着使用 `userId::消息内容` 的格式即可发送私聊消息。
 
-同时另一个账号收不到消息。
+对方客户端会在成功处理后发送 ACK；未 ACK 时服务端按退避策略重试，客户端按 messageId 去重。
 
 ## 分布式可靠消息 Demo
 
