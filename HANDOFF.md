@@ -5,7 +5,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 
 ## Completed in this phase
 - Audited the existing multi-module Java 17 TIM project and preserved all pre-existing user changes.
-- Confirmed the existing Maven test suite passes: 39 common, 1 server, 25 client, and 4 gateway tests.
+- Confirmed the current Maven test suite passes: 43 common, 16 server, 29 client, and 5 gateway tests (93 total).
 - Confirmed `docker compose config` succeeds.
 - Added Actuator health/metrics exposure to `tim-server`.
 - Added two separately configured TIM service containers to Compose with distinct node IDs, HTTP ports, and Netty ports.
@@ -42,6 +42,9 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - Changed group broadcast publication to `GROUP_MESSAGE_CREATED` through the transactional Outbox; Relay broadcasts only after commit.
 - Added scheduled MySQL-to-Redis offline projection rebuild, bounded by `tim.offline.max-size`, for Redis cache loss/recovery.
 - Fixed Compose runtime validation: ZooKeeper/RocketMQ health checks no longer depend on missing `nc`; MySQL host port is configurable with `TIM_MYSQL_PORT`; Flyway is the Compose schema owner; and RocketMQ Bus initialization no longer forms a Spring circular dependency.
+- Fixed Gateway method-validation startup failures by keeping `@Valid` constraints on the `RouteApi` contract instead of redefining them only in `RouteController`.
+- Made TIM nodes recursively create a missing ZooKeeper root path, so a fresh ensemble does not require manual `/im` bootstrap.
+- Made the client's first login attempt explicitly non-reconnect, avoiding null unboxing after a failed Gateway login.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -58,7 +61,8 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - Redis route Hash is `tim:route:user:{userId}`; offline ZSet is `im:offline:{userId}` with messageId members and per-user delivery cursors.
 
 ## Validation
-- `./mvnw.cmd test`: latest run exited 0; surefire reports contain no non-zero failures/errors.
+- `./mvnw.cmd test`: latest run exited 0; 93 tests, 0 failures, 0 errors, 0 skipped.
+- `./mvnw.cmd verify`: latest run exited 0 after the Gateway/ZooKeeper/client startup fixes.
 - `docker compose config`: latest run exited 0.
 - `./mvnw.cmd -q verify -DskipTests`: latest run exited 0.
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=BeanConfigTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
@@ -75,7 +79,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - `docker compose config`: latest run exited 0 after correcting the container healthcheck command.
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
-- `docker info`: Docker Desktop Linux daemon was available during the latest attempt.
+- `docker info`: Docker Desktop Linux daemon was available for the prior smoke run, but stopped during the latest image rebuild; the current Docker API pipe is unavailable.
 - `scripts/smoke-test.ps1`: latest run passed with `TIM_MYSQL_PORT=13306`; both TIM nodes and all middleware became healthy, and the script's durable offline idempotency, cross-node group persistence, and persisted-message-after-node-restart assertions passed.
 
 ## Known blockers / boundaries
@@ -83,6 +87,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - The current project is Java 17/Spring Boot 3, not Java 21.
 - Real TCP client-to-client delivery, node-kill recovery, Redis/RocketMQ fault injection, and online RocketMQ broadcast consumption remain unverified.
 - The HTTP smoke assertions prove shared durable persistence paths, but do not replace the pending TCP/middleware failure scenarios.
+- The latest real-client attempt proved Gateway account registration after the validation fix, then exposed and fixed fresh-ZooKeeper parent creation plus the client reconnect-null bug. Docker stopped before the rebuilt nodes could be re-tested, so this is not TCP delivery evidence.
 
 ## Next actions
 1. Run a real two-client Netty acceptance against the Compose nodes.
