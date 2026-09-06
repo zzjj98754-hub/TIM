@@ -28,6 +28,7 @@ public class ReliableMessageService {
     private final ObjectMapper json;
     private final SnowflakeIdGenerator ids;
     private final OutboxRepository outbox;
+    private final DeliveryRepository deliveries;
     private final Map<String, PendingDelivery> pending = new ConcurrentHashMap<>();
     private NodeMessageBus bus;
     private final int maxRetries;
@@ -38,16 +39,18 @@ public class ReliableMessageService {
     public ReliableMessageService(RedisRouteService routes, StringRedisTemplate redis, MessageHistoryRepository history,
                                   ObjectMapper json, SnowflakeIdGenerator ids, OutboxRepository outbox,
                                   int maxRetries, long retryMs, int offlineLimit) {
-        this(routes, redis, history, json, ids, outbox, maxRetries, retryMs, offlineLimit, 10);
+        this(routes, redis, history, json, ids, outbox, null, maxRetries, retryMs, offlineLimit, 10);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ReliableMessageService(RedisRouteService routes, StringRedisTemplate redis, MessageHistoryRepository history,
                                   ObjectMapper json, SnowflakeIdGenerator ids, OutboxRepository outbox,
+                                  DeliveryRepository deliveries,
                                   @Value("${tim.delivery.max-retries:3}") int maxRetries,
                                   @Value("${tim.delivery.retry-ms:5000}") long retryMs,
                                   @Value("${tim.offline.max-size:1000}") int offlineLimit,
                                   @Value("${tim.outbox.max-retries:10}") int outboxMaxRetries) {
-        this.routes = routes; this.redis = redis; this.history = history; this.json = json; this.ids = ids; this.outbox = outbox;
+        this.routes = routes; this.redis = redis; this.history = history; this.json = json; this.ids = ids; this.outbox = outbox; this.deliveries = deliveries;
         this.maxRetries = maxRetries; this.retryMs = retryMs; this.offlineLimit = offlineLimit; this.outboxMaxRetries = outboxMaxRetries;
     }
     @org.springframework.beans.factory.annotation.Autowired
@@ -64,6 +67,7 @@ public class ReliableMessageService {
         try {
             boolean inserted = history.insertIfAbsent(message, "PENDING");
             if (!inserted) return;
+            if (deliveries != null) deliveries.createPending(message);
             outbox.append(message);
         } catch (RuntimeException e) {
             redis.delete(dedupKey);
@@ -93,6 +97,7 @@ public class ReliableMessageService {
         if (channel == null || !channel.isActive()) { saveOffline(message, "channel offline"); return; }
         try {
             channel.writeAndFlush(new TIMReqMsg(requestId(message.getMessageId()), json.writeValueAsString(message), Constants.CommandType.CHAT));
+            if (deliveries != null) deliveries.markDelivering(message.getMessageId(), message.getToUserId(), System.currentTimeMillis() + retryMs);
             pending.putIfAbsent(message.getMessageId(), new PendingDelivery(message, System.currentTimeMillis() + retryMs));
         } catch (Exception ex) { saveOffline(message, "push failed"); }
     }
@@ -100,16 +105,19 @@ public class ReliableMessageService {
         try { return Long.parseLong(messageId); }
         catch (NumberFormatException ignored) { return Integer.toUnsignedLong(messageId.hashCode()); }
     }
-    public void acknowledge(String messageId) {
+    public void acknowledge(String messageId) { acknowledge(messageId, -1L); }
+    public void acknowledge(String messageId, long recipientId) {
         pending.remove(messageId);
-        history.updateStatus(messageId, "ACKED");
+        if (deliveries == null || recipientId <= 0 || deliveries.acknowledge(messageId, recipientId)) {
+            history.updateStatus(messageId, "ACKED");
+        }
     }
     @Scheduled(fixedDelayString = "${tim.delivery.scan-ms:1000}")
     void retryPending() {
         long now = System.currentTimeMillis();
         pending.forEach((id, delivery) -> {
             if (delivery.getNextRetryAt() > now) return;
-            if (delivery.getAttempts() >= maxRetries) { pending.remove(id); saveOffline(delivery.getMessage(), "retry exhausted"); return; }
+            if (delivery.getAttempts() >= maxRetries) { pending.remove(id); if (deliveries != null) deliveries.markOffline(delivery.getMessage().getMessageId(), delivery.getMessage().getToUserId()); saveOffline(delivery.getMessage(), "retry exhausted"); return; }
             delivery.incrementAttempts(now + retryMs);
             dispatch(delivery.getMessage());
         });
@@ -140,6 +148,7 @@ public class ReliableMessageService {
             if (size != null && size > offlineLimit) redis.opsForZSet().removeRange(key, 0, size - offlineLimit - 1);
             history.insertIfAbsent(message, "OFFLINE");
         } catch (Exception ignored) { history.insertIfAbsent(message, "OFFLINE"); }
+        if (deliveries != null) deliveries.markOffline(message.getMessageId(), message.getToUserId());
     }
     public List<OfflineMessage> pullOffline(long userId, long cursor, int limit) {
         String key = "im:offline:" + userId;

@@ -151,7 +151,7 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
                 if (session != null && msg.getReqMsg() != null && msg.getReqMsg().startsWith("OFFLINE:")) {
                     SpringBeanFactory.getBean(ReliableMessageService.class).acknowledgeOffline(session.getUserId(), Long.parseLong(msg.getReqMsg().substring("OFFLINE:".length())));
                 } else {
-                    SpringBeanFactory.getBean(ReliableMessageService.class).acknowledge(msg.getReqMsg());
+                    SpringBeanFactory.getBean(ReliableMessageService.class).acknowledge(msg.getReqMsg(), session == null ? -1L : session.getUserId());
                 }
             });
         }

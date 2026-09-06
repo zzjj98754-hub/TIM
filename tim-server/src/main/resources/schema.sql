@@ -29,3 +29,10 @@ CREATE TABLE IF NOT EXISTS group_message (message_id VARCHAR(64) PRIMARY KEY, gr
 CREATE TABLE IF NOT EXISTS group_message_inbox (group_id BIGINT NOT NULL, user_id BIGINT NOT NULL, message_id VARCHAR(64) NOT NULL, created_at TIMESTAMP NOT NULL, PRIMARY KEY(group_id, user_id, message_id));
 CREATE TABLE IF NOT EXISTS group_member_cursor (group_id BIGINT NOT NULL, user_id BIGINT NOT NULL, last_read_sequence BIGINT NOT NULL DEFAULT 0, PRIMARY KEY(group_id, user_id));
 CREATE TABLE IF NOT EXISTS offline_message_index (user_id BIGINT NOT NULL, delivery_cursor BIGINT NOT NULL, message_id VARCHAR(64) NOT NULL, PRIMARY KEY(user_id, delivery_cursor), UNIQUE(user_id, message_id));
+CREATE TABLE IF NOT EXISTS message_delivery (
+  message_id VARCHAR(64) NOT NULL, recipient_id BIGINT NOT NULL, status VARCHAR(16) NOT NULL,
+  attempt_count INT NOT NULL DEFAULT 0, next_retry_at TIMESTAMP NOT NULL,
+  lease_owner VARCHAR(128), lease_until TIMESTAMP, last_error VARCHAR(512),
+  created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, acked_at TIMESTAMP,
+  PRIMARY KEY(message_id, recipient_id)
+);
