@@ -33,14 +33,22 @@ public class ReliableMessageService {
     private final int maxRetries;
     private final long retryMs;
     private final int offlineLimit;
+    private final int outboxMaxRetries;
+
+    public ReliableMessageService(RedisRouteService routes, StringRedisTemplate redis, MessageHistoryRepository history,
+                                  ObjectMapper json, SnowflakeIdGenerator ids, OutboxRepository outbox,
+                                  int maxRetries, long retryMs, int offlineLimit) {
+        this(routes, redis, history, json, ids, outbox, maxRetries, retryMs, offlineLimit, 10);
+    }
 
     public ReliableMessageService(RedisRouteService routes, StringRedisTemplate redis, MessageHistoryRepository history,
                                   ObjectMapper json, SnowflakeIdGenerator ids, OutboxRepository outbox,
                                   @Value("${tim.delivery.max-retries:3}") int maxRetries,
                                   @Value("${tim.delivery.retry-ms:5000}") long retryMs,
-                                  @Value("${tim.offline.max-size:1000}") int offlineLimit) {
+                                  @Value("${tim.offline.max-size:1000}") int offlineLimit,
+                                  @Value("${tim.outbox.max-retries:10}") int outboxMaxRetries) {
         this.routes = routes; this.redis = redis; this.history = history; this.json = json; this.ids = ids; this.outbox = outbox;
-        this.maxRetries = maxRetries; this.retryMs = retryMs; this.offlineLimit = offlineLimit;
+        this.maxRetries = maxRetries; this.retryMs = retryMs; this.offlineLimit = offlineLimit; this.outboxMaxRetries = outboxMaxRetries;
     }
     @org.springframework.beans.factory.annotation.Autowired
     void setBus(NodeMessageBus bus) { this.bus = bus; }
@@ -109,13 +117,13 @@ public class ReliableMessageService {
 
     @Scheduled(fixedDelayString = "${tim.outbox.scan-ms:1000}")
     void relayOutbox() {
-        for (OutboxRepository.OutboxEvent event : outbox.pending(100)) {
+        for (OutboxRepository.OutboxEvent event : outbox.claimPending(100)) {
             try {
                 ChatMessage message = json.readValue(event.payload(), ChatMessage.class);
                 dispatch(message);
                 outbox.sent(event.eventId());
             } catch (Exception e) {
-                outbox.retry(event.eventId(), e.getClass().getSimpleName());
+                outbox.retry(event.eventId(), e.getClass().getSimpleName(), outboxMaxRetries);
             }
         }
     }
