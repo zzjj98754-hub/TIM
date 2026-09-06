@@ -19,10 +19,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Main learning path: route -> node transport -> local push -> ACK -> bounded retry/offline. */
 @Service
 public class ReliableMessageService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ReliableMessageService.class);
     private final RedisRouteService routes;
     private final StringRedisTemplate redis;
     private final MessageHistoryRepository history;
@@ -34,9 +37,9 @@ public class ReliableMessageService {
     private NodeMessageBus bus;
     private final int maxRetries;
     private final long retryMs;
-    private final int offlineLimit;
     private final int outboxMaxRetries;
     private final String deliveryWorkerId = UUID.randomUUID().toString();
+    private final int offlineLimit;
 
     public ReliableMessageService(RedisRouteService routes, StringRedisTemplate redis, MessageHistoryRepository history,
                                   ObjectMapper json, SnowflakeIdGenerator ids, OutboxRepository outbox,
@@ -184,6 +187,20 @@ public class ReliableMessageService {
         if (cursor <= 0) return;
         if (history.acknowledgeOffline(userId, cursor)) {
             redis.opsForZSet().removeRangeByScore("im:offline:" + userId, Double.NEGATIVE_INFINITY, cursor);
+        }
+    }
+    @Scheduled(fixedDelayString = "${tim.offline.rebuild-ms:60000}")
+    void rebuildOfflineProjection() {
+        try {
+            for (Long userId : history.findOfflineUsers(1000)) {
+                String key = "im:offline:" + userId;
+                for (OfflineMessage message : history.findRecentOfflineRecords(userId, offlineLimit)) {
+                    redis.opsForZSet().add(key, message.getMessageId(), message.getDeliveryCursor());
+                }
+                redis.expire(key, Duration.ofDays(7));
+            }
+        } catch (Exception e) {
+            LOGGER.warn("offline Redis projection rebuild deferred", e);
         }
     }
 }

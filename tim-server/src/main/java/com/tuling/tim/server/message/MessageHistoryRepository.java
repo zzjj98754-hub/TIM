@@ -67,4 +67,11 @@ public class MessageHistoryRepository {
         return jdbc.query("SELECT i.message_id, i.delivery_cursor, m.body FROM offline_message_index i JOIN im_message m ON m.message_id=i.message_id WHERE i.user_id=? AND i.delivery_cursor>? ORDER BY i.delivery_cursor LIMIT ?",
                 (rs, row) -> new OfflineMessage(rs.getString(1), rs.getLong(2), rs.getString(3)), userId, cursor, limit);
     }
+    public List<Long> findOfflineUsers(int limit) {
+        return jdbc.queryForList("SELECT DISTINCT user_id FROM offline_message_index ORDER BY user_id LIMIT ?", Long.class, limit);
+    }
+    public List<OfflineMessage> findRecentOfflineRecords(long userId, int limit) {
+        return jdbc.query("SELECT i.message_id, i.delivery_cursor, m.body FROM offline_message_index i JOIN im_message m ON m.message_id=i.message_id WHERE i.user_id=? ORDER BY i.delivery_cursor DESC LIMIT ?",
+                (rs, row) -> new OfflineMessage(rs.getString(1), rs.getLong(2), rs.getString(3)), userId, limit);
+    }
 }
