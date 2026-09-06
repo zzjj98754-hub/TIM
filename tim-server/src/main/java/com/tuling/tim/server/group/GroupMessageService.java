@@ -3,7 +3,6 @@ package com.tuling.tim.server.group;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tuling.tim.server.message.ChatMessage;
 import com.tuling.tim.server.message.ReliableMessageService;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.tuling.tim.server.mq.NodeMessageBus;
@@ -24,10 +23,10 @@ public class GroupMessageService {
     private final ObjectMapper json;
     private final JdbcTemplate jdbc;
     private final NodeMessageBus bus;
-    private final int writeFanoutLimit;
+    private final GroupFanoutStrategySelector strategySelector;
     public GroupMessageService(StringRedisTemplate redis, ReliableMessageService messages, ObjectMapper json, JdbcTemplate jdbc, NodeMessageBus bus,
-                               @Value("${tim.group.write-fanout-limit:500}") int writeFanoutLimit) {
-        this.redis = redis; this.json = json; this.jdbc = jdbc; this.bus = bus; this.writeFanoutLimit = writeFanoutLimit;
+                               GroupFanoutStrategySelector strategySelector) {
+        this.redis = redis; this.json = json; this.jdbc = jdbc; this.bus = bus; this.strategySelector = strategySelector;
     }
     public void addMember(long groupId, long userId) {
         jdbc.update("INSERT INTO im_group (group_id, name, created_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE group_id=group_id", groupId, "group-" + groupId);
@@ -53,7 +52,7 @@ public class GroupMessageService {
         source.setMessageId(messageId);
         long sequence = nextSequence(source.getGroupId());
         jdbc.update("INSERT INTO group_message (message_id, group_id, group_sequence, sender_id, content, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", messageId, source.getGroupId(), sequence, source.getFromUserId(), source.getContent());
-        if (members.size() < writeFanoutLimit) {
+        if (strategySelector.select(members.size()) == GroupFanoutStrategy.WRITE) {
             for (Long member : members) jdbc.update("INSERT INTO group_message_inbox (group_id, user_id, message_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", source.getGroupId(), member, messageId);
             bus.broadcastGroup(source);
             return "WRITE_FANOUT";
@@ -69,7 +68,7 @@ public class GroupMessageService {
         List<String> ids = new ArrayList<>(redis.opsForZSet().rangeByScore("im:group:messages:" + groupId, cursor + 1, Double.MAX_VALUE, 0, limit));
         if (ids.isEmpty()) {
             Integer memberCount = jdbc.queryForObject("SELECT COUNT(*) FROM group_member WHERE group_id=?", Integer.class, groupId);
-            if (memberCount != null && memberCount >= writeFanoutLimit) {
+            if (memberCount != null && strategySelector.select(memberCount) == GroupFanoutStrategy.READ) {
                 // Large groups have no per-member inbox rows. MySQL remains
                 // the durable source when the Redis read index is incomplete.
                 ids = jdbc.queryForList("SELECT message_id FROM group_message WHERE group_id=? AND group_sequence>? ORDER BY group_sequence LIMIT ?", String.class, groupId, cursor, limit);

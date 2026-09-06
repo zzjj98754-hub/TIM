@@ -28,6 +28,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - Made route Hash, TTL, presence, and session/epoch conditional cleanup atomic with Redis Lua scripts.
 - Added bounded client-side messageId/clientMessageId de-duplication; duplicate deliveries are ACKed without invoking the callback or displaying the message again.
 - Changed group permission/size checks to use MySQL `group_member` as the source of truth and made group sequence allocation transactional with row locking for multi-node safety.
+- Added `GroupFanoutStrategySelector` with a tested threshold boundary so write/read fanout selection has one explicit entry point.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -52,6 +53,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - `./mvnw.cmd -q -pl tim-gateway -am test`: latest run exited 0.
 - `./mvnw.cmd -q -pl tim-client -am -Dtest=MessageDeduplicatorTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=GroupChannelPushServiceTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
+- `./mvnw.cmd -q -pl tim-server -am -Dtest=GroupFanoutStrategySelectorTest,GroupChannelPushServiceTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
 - `docker version`: Docker CLI could not connect to the Docker Desktop Linux daemon, so `scripts/smoke-test.ps1` was not claimed as passed.
