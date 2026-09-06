@@ -22,6 +22,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - Made local session maps use Netty `Channel`, fixed string message IDs in push request IDs, and made ZooKeeper root creation safe under concurrent node startup.
 - Added GitHub Actions CI for Maven test/verify and Compose model validation.
 - Replaced stale architecture status claims with current implementation evidence and added deployment, delivery, offline, group, testing, limitations, and acceptance-report documents.
+- Replaced `CallerRunsPolicy` with an instrumented bounded-queue rejection policy so blocking work is not run on a Netty caller thread; exposed executor gauges and rejection counter through Micrometer.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -41,6 +42,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - `./mvnw.cmd test`: latest run exited 0; surefire reports contain no non-zero failures/errors.
 - `docker compose config`: latest run exited 0.
 - `./mvnw.cmd -q verify -DskipTests`: latest run exited 0.
+- `./mvnw.cmd -q -pl tim-server -am -Dtest=BeanConfigTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
 - `docker version`: Docker CLI could not connect to the Docker Desktop Linux daemon, so `scripts/smoke-test.ps1` was not claimed as passed.

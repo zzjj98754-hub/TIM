@@ -2,6 +2,8 @@ package com.tuling.tim.server.config;
 
 import com.tuling.tim.common.constant.Constants;
 import com.tuling.tim.common.protocol.TIMReqMsg;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import okhttp3.OkHttpClient;
 import org.I0Itec.zkclient.ZkClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,6 +61,19 @@ public class BeanConfig {
         return new ThreadPoolExecutor(4, 16, 60, TimeUnit.SECONDS,
                 new ArrayBlockingQueue<>(1000),
                 Executors.defaultThreadFactory(),
-                new ThreadPoolExecutor.CallerRunsPolicy());
+                new InstrumentedRejectedExecutionHandler());
+    }
+
+    @Bean
+    public InstrumentedRejectedExecutionHandler timBusinessExecutorMetrics(
+            ThreadPoolExecutor executor, MeterRegistry registry) {
+        InstrumentedRejectedExecutionHandler handler =
+                (InstrumentedRejectedExecutionHandler) executor.getRejectedExecutionHandler();
+        handler.bindTo(registry);
+        Gauge.builder("tim.business.executor.active", executor, ThreadPoolExecutor::getActiveCount).register(registry);
+        Gauge.builder("tim.business.executor.queue", executor, value -> value.getQueue().size()).register(registry);
+        Gauge.builder("tim.business.executor.pool", executor, ThreadPoolExecutor::getPoolSize).register(registry);
+        Gauge.builder("tim.business.executor.completed", executor, ThreadPoolExecutor::getCompletedTaskCount).register(registry);
+        return handler;
     }
 }
