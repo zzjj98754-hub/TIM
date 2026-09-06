@@ -70,6 +70,12 @@ public class GroupMessageService {
         List<String> bodies = loadBodies(ids, groupId);
         return bodies;
     }
+    public void acknowledge(long groupId, long userId, long cursor) {
+        if (cursor <= 0) return;
+        jdbc.update("INSERT INTO group_member_cursor (group_id, user_id, last_read_sequence) VALUES (?, ?, ?) "
+                + "ON DUPLICATE KEY UPDATE last_read_sequence=GREATEST(last_read_sequence, VALUES(last_read_sequence))",
+                groupId, userId, cursor);
+    }
     private synchronized long nextSequence(long groupId) {
         jdbc.update("INSERT INTO group_sequence (group_id, next_sequence) VALUES (?, 1) ON DUPLICATE KEY UPDATE group_id=group_id", groupId);
         Long value = jdbc.queryForObject("SELECT next_sequence FROM group_sequence WHERE group_id=?", Long.class, groupId);
