@@ -7,6 +7,11 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - tim_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
 
   zookeeper:
@@ -21,6 +26,11 @@ services:
     volumes:
       - tim_zookeeper_data:/data
       - tim_zookeeper_datalog:/datalog
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 127.0.0.1 2181 | grep -q imok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
 
   mysql:
@@ -36,6 +46,11 @@ services:
     volumes:
       - tim_mysql_data:/var/lib/mysql
       - ./script/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -proot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     restart: unless-stopped
 
   rocketmq-namesrv:
@@ -44,6 +59,11 @@ services:
     ports:
       - "9876:9876"
     command: sh mqnamesrv
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9876"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
     restart: unless-stopped
 
   rocketmq-broker:
@@ -56,6 +76,11 @@ services:
     ports:
       - "10911:10911"
     command: sh mqbroker
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 10911"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     restart: unless-stopped
 
   tim-node-1:
@@ -65,13 +90,13 @@ services:
     container_name: tim-node-1
     depends_on:
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       zookeeper:
-        condition: service_started
+        condition: service_healthy
       rocketmq-broker:
-        condition: service_started
+        condition: service_healthy
     environment:
       TIM_SERVER_ID: im-server-1
       TIM_NODE_ID: "1"
@@ -101,13 +126,13 @@ services:
     container_name: tim-node-2
     depends_on:
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       zookeeper:
-        condition: service_started
+        condition: service_healthy
       rocketmq-broker:
-        condition: service_started
+        condition: service_healthy
     environment:
       TIM_SERVER_ID: im-server-2
       TIM_NODE_ID: "2"
