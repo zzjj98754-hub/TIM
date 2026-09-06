@@ -153,13 +153,9 @@ public class AccountServiceRedisImpl implements AccountService {
 
     @Override
     public void offLine(Long userId) throws Exception {
-
-        // TODO 这里需要用lua保证原子性
-
-        //删除路由
-        redisTemplate.delete(ROUTE_PREFIX + userId);
-
-        //删除登录状态
+        // Route ownership belongs to the authenticated Netty session.  This
+        // compatibility endpoint must not delete a replacement connection's
+        // route; the server closes it with sessionId + epoch matching.
         userInfoCacheService.removeLoginStatus(userId);
     }
 }
