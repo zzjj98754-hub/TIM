@@ -34,6 +34,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - Hardened `ObjDecoder` to reject empty bodies and added EmbeddedChannel coverage for invalid magic/version, negative/oversized lengths, split frames, and coalesced frames.
 - Added health checks for Redis, MySQL, ZooKeeper, RocketMQ NameServer/Broker and health-gated dependencies for both TIM nodes in Compose.
 - Added configurable 64 KiB default business-content validation at the Netty handler before persistence, routing, or MQ work.
+- Corrected TIM Compose health checks to use the `curl` binary installed by `Dockerfile.tim-server` instead of unavailable `wget`.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -64,6 +65,7 @@ Resume-alignment implementation and documentation complete locally; middleware s
 - `./mvnw.cmd -q -pl tim-common -Dtest=TIMFrameCodecTest test`: latest run exited 0.
 - `docker compose config`: latest run exited 0 after adding middleware health checks.
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=TIMServerHandleTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0 after content-limit coverage.
+- `docker compose config`: latest run exited 0 after correcting the container healthcheck command.
 - `.github/workflows/ci.yml`: added; it runs Maven test/verify and `docker compose config` on Ubuntu.
 - `git diff --check`: latest run exited 0.
 - `docker version`: Docker CLI could not connect to the Docker Desktop Linux daemon, so `scripts/smoke-test.ps1` was not claimed as passed.
