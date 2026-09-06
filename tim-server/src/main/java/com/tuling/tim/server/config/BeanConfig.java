@@ -9,6 +9,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.Executors;
 
 /**
  * @since JDK 1.8
@@ -49,5 +52,13 @@ public class BeanConfig {
     public TIMReqMsg heartBeat() {
         TIMReqMsg heart = new TIMReqMsg(0L, "pong", Constants.CommandType.PING);
         return heart;
+    }
+
+    @Bean(destroyMethod = "shutdown")
+    public ThreadPoolExecutor timBusinessExecutor() {
+        return new ThreadPoolExecutor(4, 16, 60, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(1000),
+                Executors.defaultThreadFactory(),
+                new ThreadPoolExecutor.CallerRunsPolicy());
     }
 }

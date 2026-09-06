@@ -106,6 +106,18 @@ public class TIMClientHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
             echoService.echo(response);
         }
 
+        // The ACK is deliberately generated at the client edge: the server can now
+        // distinguish a successful socket write from a message the client observed.
+        if (msg.getType() == Constants.CommandType.CHAT) {
+            try {
+                String messageId = new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readTree(msg.getReqMsg()).path("messageId").asText();
+                if (!messageId.isEmpty()) ctx.writeAndFlush(new TIMReqMsg(0L, messageId, Constants.CommandType.ACK));
+            } catch (Exception e) {
+                LOGGER.warn("cannot ACK malformed chat payload", e);
+            }
+        }
+
 
     }
 

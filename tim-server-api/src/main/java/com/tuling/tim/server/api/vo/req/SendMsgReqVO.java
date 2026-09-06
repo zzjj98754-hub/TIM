@@ -2,7 +2,7 @@ package com.tuling.tim.server.api.vo.req;
 
 import com.tuling.tim.common.req.BaseRequest;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * @since JDK 1.8

@@ -2,7 +2,7 @@ package com.tuling.tim.client.vo.req;
 
 import com.tuling.tim.common.req.BaseRequest;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * Google Protocol 编解码发送

@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map.Entry;
 
 /**
  * 服务器节点缓存
@@ -21,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ServerCache {
 
     private static Logger logger = LoggerFactory.getLogger(ServerCache.class);
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     @Autowired
     private LoadingCache<String, String> cache;
@@ -41,13 +44,7 @@ public class ServerCache {
     public void updateCache(List<String> currentChildren) {
         Map<String, String> snapshot = new ConcurrentHashMap<>(currentChildren.size());
         for (String currentChild : currentChildren) {
-            // currentChildren=ip-127.0.0.1:11212:9082 or 127.0.0.1:11212:9082
-            String key;
-            if (currentChild.split("-").length == 2) {
-                key = currentChild.split("-")[1];
-            } else {
-                key = currentChild;
-            }
+            String key = normalizeNode(currentChild);
             snapshot.put(key, key);
         }
         cache.invalidateAll();
@@ -57,6 +54,16 @@ public class ServerCache {
     private String normalizeNode(String node) {
         if (node == null) {
             return null;
+        }
+        // New /im/servers/{serverId} entries keep host/ports in znode data.
+        try {
+            String data = zkUtil.getNodeData(node);
+            if (data != null && data.startsWith("{")) {
+                Map<?, ?> info = JSON.readValue(data, Map.class);
+                return info.get("host") + ":" + info.get("tcpPort") + ":" + info.get("httpPort");
+            }
+        } catch (Exception e) {
+            logger.warn("Unable to read zookeeper node data for {}", node, e);
         }
         String[] parts = node.split("-");
         if (parts.length == 2) {

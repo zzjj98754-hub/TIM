@@ -14,7 +14,7 @@ public final class Constant {
     /**
      * 路由信息前缀
      */
-    public final static String ROUTE_PREFIX = "tim-route:";
+    public final static String ROUTE_PREFIX = "tim:route:user:";
 
     /**
      * 登录状态前缀

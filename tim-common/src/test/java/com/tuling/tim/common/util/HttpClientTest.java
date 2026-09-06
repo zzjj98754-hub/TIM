@@ -1,14 +1,16 @@
 package com.tuling.tim.common.util;
 
-import com.alibaba.fastjson.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import okhttp3.OkHttpClient;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -17,11 +19,13 @@ import java.util.concurrent.TimeUnit;
 
 public class HttpClientTest {
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private OkHttpClient okHttpClient;
     private HttpServer server;
     private int port;
 
-    @Before
+    @BeforeEach
     public void before() throws IOException {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
         builder.connectTimeout(30, TimeUnit.SECONDS)
@@ -36,7 +40,7 @@ public class HttpClientTest {
         server.start();
     }
 
-    @After
+    @AfterEach
     public void after() {
         if (server != null) {
             server.stop(0);
@@ -45,23 +49,20 @@ public class HttpClientTest {
 
     @Test
     public void call() throws IOException {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("msg", "hello");
-        jsonObject.put("userId", 1586617710861L);
+        String json = OBJECT_MAPPER.writeValueAsString(new Payload("hello", 1586617710861L));
 
-        Assert.assertTrue(HttpClient.call(okHttpClient, jsonObject.toString(), "http://127.0.0.1:" + port + "/sendMsg").isSuccessful());
+        assertTrue(HttpClient.call(okHttpClient, json, "http://127.0.0.1:" + port + "/sendMsg").isSuccessful());
     }
 
-    @Test(expected = IOException.class)
+    @Test
     public void callFailWhenHttpStatusIsError() throws IOException {
         server.removeContext("/sendMsg");
         server.createContext("/sendMsg", new JsonHandler(500, "{\"code\":\"4000\"}"));
 
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("msg", "hello");
-        jsonObject.put("userId", 1586617710861L);
+        String json = OBJECT_MAPPER.writeValueAsString(new Payload("hello", 1586617710861L));
 
-        HttpClient.call(okHttpClient, jsonObject.toString(), "http://127.0.0.1:" + port + "/sendMsg");
+        assertThrows(IOException.class,
+                () -> HttpClient.call(okHttpClient, json, "http://127.0.0.1:" + port + "/sendMsg"));
     }
 
     private static final class JsonHandler implements HttpHandler {
@@ -80,6 +81,24 @@ public class HttpClientTest {
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(body);
             }
+        }
+    }
+
+    private static final class Payload {
+        private final String msg;
+        private final long userId;
+
+        private Payload(String msg, long userId) {
+            this.msg = msg;
+            this.userId = userId;
+        }
+
+        public String getMsg() {
+            return msg;
+        }
+
+        public long getUserId() {
+            return userId;
         }
     }
 }

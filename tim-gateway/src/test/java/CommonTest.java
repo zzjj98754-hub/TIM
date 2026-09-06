@@ -1,5 +1,5 @@
 import com.tuling.tim.gateway.kit.NetAddressIsReachable;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * @since JDK 1.8

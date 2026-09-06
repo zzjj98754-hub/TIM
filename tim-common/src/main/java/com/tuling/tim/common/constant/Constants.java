@@ -36,6 +36,15 @@ public class Constants {
          * ping
          */
         public static final int PING = 3 ;
+
+        /** Client -> server direct message. */
+        public static final int CHAT = 4 ;
+        /** Client -> server delivery acknowledgement. */
+        public static final int ACK = 5 ;
+        /** Client requests an incremental offline-message page. */
+        public static final int OFFLINE_PULL = 6 ;
+        /** Client -> server group message. */
+        public static final int GROUP_CHAT = 7 ;
     }
 
 

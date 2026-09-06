@@ -9,6 +9,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  *
@@ -18,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 public final class ReConnectManager {
 
     private ScheduledExecutorService scheduledExecutorService;
+    private final AtomicInteger attempts = new AtomicInteger();
 
     /**
      * Trigger reconnect job
@@ -25,14 +28,18 @@ public final class ReConnectManager {
      */
     public void reConnect(ChannelHandlerContext ctx) {
         buildExecutor() ;
-        scheduledExecutorService.scheduleAtFixedRate(new ReConnectJob(ctx),0,10, TimeUnit.SECONDS) ;
+        int attempt = attempts.getAndIncrement();
+        long base = Math.min(30L, 1L << Math.min(attempt, 5));
+        long jitter = ThreadLocalRandom.current().nextLong(0, Math.max(1, base / 4 + 1));
+        scheduledExecutorService.schedule(new ReConnectJob(ctx, this), base + jitter, TimeUnit.SECONDS);
     }
 
     /**
      * Close reconnect job if reconnect success.
      */
     public void reConnectSuccess(){
-        scheduledExecutorService.shutdown();
+        attempts.set(0);
+        if (scheduledExecutorService != null) scheduledExecutorService.shutdown();
     }
 
 

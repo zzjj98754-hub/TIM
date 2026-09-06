@@ -21,9 +21,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.net.InetSocketAddress;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @since JDK 1.8
@@ -84,7 +85,7 @@ public class TIMServer {
     public BaseResponse<SendMsgResVO> sendMsg(SendMsgReqVO sendMsgReqVO) {
         NioSocketChannel socketChannel = SessionSocketHolder.get(sendMsgReqVO.getUserId());
 
-        if (null == socketChannel) {
+        if (socketChannel == null || !socketChannel.isActive()) {
             LOGGER.error("client {} offline!", sendMsgReqVO.getUserId());
             BaseResponse<SendMsgResVO> res = new BaseResponse<>();
             res.setCode(StatusEnum.OFF_LINE.getCode());
@@ -94,19 +95,13 @@ public class TIMServer {
         TIMReqMsg protocol = new TIMReqMsg(sendMsgReqVO.getUserId(), sendMsgReqVO.getMsg(), Constants.CommandType.MSG);
 
         ChannelFuture future = socketChannel.writeAndFlush(protocol);
-        if (future == null) {
+        if (future == null || !future.awaitUninterruptibly(5, TimeUnit.SECONDS) || !future.isSuccess()) {
             BaseResponse<SendMsgResVO> res = new BaseResponse<>();
             res.setCode(StatusEnum.FAIL.getCode());
             res.setMessage(StatusEnum.FAIL.getMessage());
             return res;
         }
-        future.addListener((ChannelFutureListener) channelFuture -> {
-            if (channelFuture.isSuccess()) {
-                LOGGER.info("server push msg:[{}]", sendMsgReqVO.toString());
-            } else {
-                LOGGER.error("server push msg failed:[{}]", sendMsgReqVO.toString(), channelFuture.cause());
-            }
-        });
+        LOGGER.info("server push msg:[{}]", sendMsgReqVO.toString());
         BaseResponse<SendMsgResVO> res = new BaseResponse<>();
         SendMsgResVO sendMsgResVO = new SendMsgResVO();
         sendMsgResVO.setMsg("OK");

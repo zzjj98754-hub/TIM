@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.net.InetAddress;
 
@@ -16,6 +17,7 @@ import java.net.InetAddress;
  *
  */
 @SpringBootApplication
+@EnableScheduling
 public class TIMServerApplication implements CommandLineRunner {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(TIMServerApplication.class);

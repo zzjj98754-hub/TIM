@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import java.util.Map;
 import java.util.Set;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 
 /**
  * @since JDK 1.8

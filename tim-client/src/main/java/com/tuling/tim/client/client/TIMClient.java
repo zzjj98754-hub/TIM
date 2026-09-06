@@ -26,10 +26,11 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 
 /**
  * @since JDK 1.8
@@ -59,7 +60,7 @@ public class TIMClient {
     private AppConfiguration configuration;
 
     @Autowired
-    private MsgHandle msgHandle;
+    private ObjectProvider<MsgHandle> msgHandleProvider;
 
     @Autowired
     private ClientInfo clientInfo;
@@ -115,7 +116,7 @@ public class TIMClient {
 
             if (errorCount >= configuration.getErrorCount()) {
                 LOGGER.error("连接失败次数达到上限[{}]次", errorCount);
-                msgHandle.shutdown();
+                msgHandleProvider.getObject().shutdown();
             }
             LOGGER.error("Connect fail!", e);
             throw new IllegalStateException("Failed to connect to tim server", e);
@@ -157,7 +158,7 @@ public class TIMClient {
 
             if (errorCount >= configuration.getErrorCount()) {
                 echoService.echo("The maximum number of reconnections has been reached[{}]times, close tim client!", errorCount);
-                msgHandle.shutdown();
+                msgHandleProvider.getObject().shutdown();
             }
             LOGGER.error("login fail", e);
             throw new IllegalStateException("login gateway failed", e);
@@ -202,6 +203,26 @@ public class TIMClient {
         future.addListener((ChannelFutureListener) channelFuture ->
                 LOGGER.info("客户端手动发送 Google Protocol 成功={}", googleProtocolVO.toString()));
 
+    }
+
+    /**
+     * Minimal direct-message entry point for a command-line/demo caller.  The
+     * receiving {@code TIMClientHandle} sends the matching ACK automatically.
+     */
+    public void sendChat(long toUserId, String content) {
+        if (channel == null || !channel.isActive()) {
+            throw new IllegalStateException("TIM client is not connected");
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("fromUserId", userId);
+            payload.put("toUserId", toUserId);
+            payload.put("content", content);
+            channel.writeAndFlush(new TIMReqMsg(System.currentTimeMillis(), mapper.writeValueAsString(payload), Constants.CommandType.CHAT));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalArgumentException("cannot encode chat payload", e);
+        }
     }
 
 

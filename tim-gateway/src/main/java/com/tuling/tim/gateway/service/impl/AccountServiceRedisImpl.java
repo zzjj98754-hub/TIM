@@ -1,9 +1,11 @@
 package com.tuling.tim.gateway.service.impl;
 
-import com.tuling.tim.common.core.proxy.ProxyManager;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tuling.tim.common.enums.StatusEnum;
 import com.tuling.tim.common.exception.TIMException;
 import com.tuling.tim.common.pojo.TIMUserInfo;
+import com.tuling.tim.common.res.BaseResponse;
+import com.tuling.tim.common.util.JsonHttpClient;
 import com.tuling.tim.common.util.RouteInfoParseUtil;
 import com.tuling.tim.gateway.api.vo.req.ChatReqVO;
 import com.tuling.tim.gateway.api.vo.req.LoginReqVO;
@@ -11,7 +13,6 @@ import com.tuling.tim.gateway.api.vo.res.RegisterInfoResVO;
 import com.tuling.tim.gateway.api.vo.res.TIMServerResVO;
 import com.tuling.tim.gateway.service.AccountService;
 import com.tuling.tim.gateway.service.UserInfoCacheService;
-import com.tuling.tim.server.api.ServerApi;
 import com.tuling.tim.server.api.vo.req.SendMsgReqVO;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
@@ -21,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 
@@ -41,6 +43,7 @@ import static com.tuling.tim.gateway.constant.Constant.ROUTE_PREFIX;
 @Service
 public class AccountServiceRedisImpl implements AccountService {
     private final static Logger LOGGER = LoggerFactory.getLogger(AccountServiceRedisImpl.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
@@ -95,7 +98,10 @@ public class AccountServiceRedisImpl implements AccountService {
     @Override
     public void saveRouteInfo(LoginReqVO loginReqVO, String msg) throws Exception {
         String key = ROUTE_PREFIX + loginReqVO.getUserId();
-        redisTemplate.opsForValue().set(key, msg);
+        Map<String, String> route = new HashMap<>();
+        route.put("route", msg); route.put("nodeId", "pending");
+        route.put("sessionId", "gateway-login"); route.put("epoch", String.valueOf(System.currentTimeMillis()));
+        redisTemplate.opsForHash().putAll(key, route);
     }
 
     @Override
@@ -121,8 +127,8 @@ public class AccountServiceRedisImpl implements AccountService {
             if (scan != null) {
                 try {
                     scan.close();
-                } catch (IOException e) {
-                    LOGGER.error("IOException", e);
+                } catch (RuntimeException e) {
+                    LOGGER.error("Unable to close Redis scan cursor", e);
                 }
             }
             if (connection != null) {
@@ -135,7 +141,9 @@ public class AccountServiceRedisImpl implements AccountService {
 
     @Override
     public TIMServerResVO loadRouteRelatedByUserId(Long userId) {
-        String value = redisTemplate.opsForValue().get(ROUTE_PREFIX + userId);
+        HashOperations<String, String, String> hash = redisTemplate.opsForHash();
+        String value = hash == null ? redisTemplate.opsForValue().get(ROUTE_PREFIX + userId)
+                : hash.get(ROUTE_PREFIX + userId, "route");
 
         if (value == null) {
             throw new TIMException(OFF_LINE);
@@ -146,8 +154,10 @@ public class AccountServiceRedisImpl implements AccountService {
     }
 
     private void parseServerInfo(Map<Long, TIMServerResVO> routes, String key) {
-        long userId = Long.valueOf(key.split(":")[1]);
-        String value = redisTemplate.opsForValue().get(key);
+        long userId = Long.valueOf(key.substring(ROUTE_PREFIX.length()));
+        HashOperations<String, String, String> hash = redisTemplate.opsForHash();
+        String value = hash == null ? redisTemplate.opsForValue().get(key) : hash.get(key, "route");
+        if (value == null) return;
         TIMServerResVO TIMServerResVO = new TIMServerResVO(RouteInfoParseUtil.parse(value));
         routes.put(userId, TIMServerResVO);
     }
@@ -158,15 +168,18 @@ public class AccountServiceRedisImpl implements AccountService {
         TIMUserInfo timUserInfo = userInfoCacheService.loadUserInfoByUserId(sendUserId);
 
         String url = "http://" + TIMServerResVO.getIp() + ":" + TIMServerResVO.getHttpPort();
-        ServerApi serverApi = new ProxyManager<>(ServerApi.class, url, okHttpClient).getInstance();
         SendMsgReqVO vo = new SendMsgReqVO(timUserInfo.getUserName() + ":" + groupReqVO.getMsg(), groupReqVO.getUserId());
         Response response = null;
         try {
-            response = (Response) serverApi.sendMsg(vo);
+            response = JsonHttpClient.post(okHttpClient, url, "/sendMsg", vo);
             if (response == null) {
                 throw new TIMException(StatusEnum.FAIL);
             }
             if (!response.isSuccessful()) {
+                throw new TIMException(StatusEnum.FAIL);
+            }
+            BaseResponse result = OBJECT_MAPPER.readValue(response.body().string(), BaseResponse.class);
+            if (result == null || !StatusEnum.SUCCESS.getCode().equals(result.getCode())) {
                 throw new TIMException(StatusEnum.FAIL);
             }
         } catch (Exception e) {

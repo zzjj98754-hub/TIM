@@ -1,7 +1,7 @@
 package com.tuling.tim.common.route.algorithm.consistenthash;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -24,9 +24,9 @@ public class SortArrayMapConsistentHashTest {
         results.add(map.process(strings, "zhangsan2"));
         results.add(map.process(strings, "1551253899106"));
 
-        Assert.assertTrue(results.size() > 1);
+        Assertions.assertTrue(results.size() > 1);
         for (String result : results) {
-            Assert.assertTrue(strings.contains(result));
+            Assertions.assertTrue(strings.contains(result));
         }
     }
 }

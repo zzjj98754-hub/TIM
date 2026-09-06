@@ -1,6 +1,6 @@
 package com.tuling.tim.client.service.impl;
 
-import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tuling.tim.client.config.AppConfiguration;
 import com.tuling.tim.client.service.EchoService;
 import com.tuling.tim.client.service.RouteRequest;
@@ -10,11 +10,10 @@ import com.tuling.tim.client.vo.req.LoginReqVO;
 import com.tuling.tim.client.vo.req.P2PReqVO;
 import com.tuling.tim.client.vo.res.OnlineUsersResVO;
 import com.tuling.tim.client.vo.res.TIMServerResVO;
-import com.tuling.tim.common.core.proxy.ProxyManager;
 import com.tuling.tim.common.enums.StatusEnum;
 import com.tuling.tim.common.exception.TIMException;
 import com.tuling.tim.common.res.BaseResponse;
-import com.tuling.tim.gateway.api.RouteApi;
+import com.tuling.tim.common.util.JsonHttpClient;
 import com.tuling.tim.gateway.api.vo.req.ChatReqVO;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
@@ -34,6 +33,7 @@ import java.util.List;
 public class RouteRequestImpl implements RouteRequest {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(RouteRequestImpl.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
     private OkHttpClient okHttpClient;
@@ -49,11 +49,10 @@ public class RouteRequestImpl implements RouteRequest {
 
     @Override
     public void sendGroupMsg(GroupReqVO groupReqVO) throws Exception {
-        RouteApi routeApi = new ProxyManager<>(RouteApi.class, gatewayUrl, okHttpClient).getInstance();
         ChatReqVO chatReqVO = new ChatReqVO(groupReqVO.getUserId(), groupReqVO.getMsg());
         Response response = null;
         try {
-            response = (Response) routeApi.groupRoute(chatReqVO);
+            response = JsonHttpClient.post(okHttpClient, gatewayUrl, "/groupRoute", chatReqVO);
             ensureSuccess(response);
         } catch (Exception e) {
             LOGGER.error("exception", e);
@@ -65,7 +64,6 @@ public class RouteRequestImpl implements RouteRequest {
 
     @Override
     public void sendP2PMsg(P2PReqVO p2PReqVO) throws Exception {
-        RouteApi routeApi = new ProxyManager<>(RouteApi.class, gatewayUrl, okHttpClient).getInstance();
         com.tuling.tim.gateway.api.vo.req.P2PReqVO vo = new com.tuling.tim.gateway.api.vo.req.P2PReqVO();
         vo.setMsg(p2PReqVO.getMsg());
         vo.setReceiveUserId(p2PReqVO.getReceiveUserId());
@@ -73,10 +71,10 @@ public class RouteRequestImpl implements RouteRequest {
 
         Response response = null;
         try {
-            response = (Response) routeApi.p2pRoute(vo);
+            response = JsonHttpClient.post(okHttpClient, gatewayUrl, "/p2pRoute", vo);
             ensureSuccess(response);
             String json = response.body().string();
-            BaseResponse baseResponse = JSON.parseObject(json, BaseResponse.class);
+            BaseResponse baseResponse = OBJECT_MAPPER.readValue(json, BaseResponse.class);
             if (StatusEnum.OFF_LINE.getCode().equals(baseResponse.getCode())) {
                 LOGGER.error(p2PReqVO.getReceiveUserId() + ":" + StatusEnum.OFF_LINE.getMessage());
             }
@@ -90,7 +88,6 @@ public class RouteRequestImpl implements RouteRequest {
 
     @Override
     public TIMServerResVO.ServerInfo getTIMServer(LoginReqVO loginReqVO) throws Exception {
-        RouteApi routeApi = new ProxyManager<>(RouteApi.class, gatewayUrl, okHttpClient).getInstance();
         com.tuling.tim.gateway.api.vo.req.LoginReqVO vo = new com.tuling.tim.gateway.api.vo.req.LoginReqVO();
         vo.setUserId(loginReqVO.getUserId());
         vo.setUserName(loginReqVO.getUserName());
@@ -98,10 +95,10 @@ public class RouteRequestImpl implements RouteRequest {
         Response response = null;
         TIMServerResVO timServerResVO = null;
         try {
-            response = (Response) routeApi.login(vo);
+            response = JsonHttpClient.post(okHttpClient, gatewayUrl, "/login", vo);
             ensureSuccess(response);
             String json = response.body().string();
-            timServerResVO = JSON.parseObject(json, TIMServerResVO.class);
+            timServerResVO = OBJECT_MAPPER.readValue(json, TIMServerResVO.class);
 
             if (!StatusEnum.SUCCESS.getCode().equals(timServerResVO.getCode())) {
                 echoService.echo(timServerResVO.getMessage());
@@ -123,15 +120,14 @@ public class RouteRequestImpl implements RouteRequest {
 
     @Override
     public List<OnlineUsersResVO.DataBodyBean> onlineUsers() throws Exception {
-        RouteApi routeApi = new ProxyManager<>(RouteApi.class, gatewayUrl, okHttpClient).getInstance();
 
         Response response = null;
         OnlineUsersResVO onlineUsersResVO = null;
         try {
-            response = (Response) routeApi.onlineUser();
+            response = JsonHttpClient.post(okHttpClient, gatewayUrl, "/onlineUser", null);
             ensureSuccess(response);
             String json = response.body().string();
-            onlineUsersResVO = JSON.parseObject(json, OnlineUsersResVO.class);
+            onlineUsersResVO = OBJECT_MAPPER.readValue(json, OnlineUsersResVO.class);
         } catch (Exception e) {
             LOGGER.error("exception", e);
             throw e;
@@ -147,11 +143,10 @@ public class RouteRequestImpl implements RouteRequest {
 
     @Override
     public void offLine() {
-        RouteApi routeApi = new ProxyManager<>(RouteApi.class, gatewayUrl, okHttpClient).getInstance();
         ChatReqVO vo = new ChatReqVO(appConfiguration.getUserId(), "offLine");
         Response response = null;
         try {
-            response = (Response) routeApi.offLine(vo);
+            response = JsonHttpClient.post(okHttpClient, gatewayUrl, "/offLine", vo);
             ensureSuccess(response);
         } catch (Exception e) {
             LOGGER.error("exception", e);

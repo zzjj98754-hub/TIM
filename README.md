@@ -63,7 +63,16 @@ docker compose up -d redis zookeeper
 
 ### 本地运行
 
-首先需要安装 `Zookeeper、Redis` 并保证网络通畅。
+基础设施就绪后，按以下顺序启动：
+
+```bash
+./mvnw spring-boot:run -pl tim-server
+./mvnw spring-boot:run -pl tim-gateway
+./mvnw spring-boot:run -pl tim-client
+```
+
+Windows PowerShell 使用 `./mvnw.cmd`。启动客户端前需要在
+`tim-client/src/main/resources/application.properties` 设置演示用户信息。
 
 ### 部署 IM-server(tim-server)
 
@@ -144,3 +153,58 @@ curl -X POST --header 'Content-Type: application/json' --header 'Accept: applica
 接着使用 `userId::消息内容` 的格式即可发送私聊消息。
 
 同时另一个账号收不到消息。
+
+## 分布式可靠消息 Demo
+
+新增的学习主链路为：
+
+```text
+TCP CHAT -> Redis 路由 -> RocketMQ（或本地降级总线）-> 目标节点 Channel
+         -> 客户端 ACK -> 服务端更新 MySQL 状态
+```
+
+帧格式为 `magic(4) + version(1) + type(1) + requestId(8) + bodyLength(4) + body`。`LengthFieldBasedFrameDecoder` 负责处理粘包、半包，消息体仍使用 Protostuff。客户端收到 `CHAT` 自动 ACK；服务端以 Redis `SETNX` 快速去重、MySQL `im_message.message_id` 唯一键最终防重，超时最多重试 3 次，随后进入 Redis ZSet 离线缓存。
+
+### 启动两个节点
+
+```powershell
+docker compose up -d redis zookeeper mysql rocketmq-namesrv rocketmq-broker
+./mvnw.cmd spring-boot:run -pl tim-gateway
+$env:TIM_SERVER_ID='im-server-1'; $env:TIM_NODE_ID='1'; $env:TIM_SERVER_HTTP_PORT='8081'; $env:TIM_SERVER_NETTY_PORT='9001'; $env:TIM_MQ_MODE='rocketmq'; ./mvnw.cmd spring-boot:run -pl tim-server
+# 在第二个终端运行：
+$env:TIM_SERVER_ID='im-server-2'; $env:TIM_NODE_ID='2'; $env:TIM_SERVER_HTTP_PORT='8082'; $env:TIM_SERVER_NETTY_PORT='9002'; $env:TIM_MQ_MODE='rocketmq'; ./mvnw.cmd spring-boot:run -pl tim-server
+```
+
+没有 RocketMQ 时将 `TIM_MQ_MODE` 设为 `local`。它保持相同投递接口，适合单 JVM 学习 ACK、重试及离线流程。MQ 模式使用 `TIM_NODE_MESSAGE` topic，并以目标 `serverId` 作为 tag 消费。
+
+### HTTP 演示
+
+先使用原有 `/registerAccount` 注册两个用户，并让两个客户端登录。然后可执行：
+
+```powershell
+Invoke-RestMethod http://localhost:8081/demo/messages -Method Post -ContentType application/json -Body '{"fromUserId":1001,"toUserId":1002,"content":"hello"}'
+Invoke-RestMethod 'http://localhost:8082/demo/offline/1002?cursor=0&limit=20'
+Invoke-RestMethod http://localhost:8081/demo/groups/9/members/1002 -Method Put
+Invoke-RestMethod http://localhost:8081/demo/groups/9/messages -Method Post -ContentType application/json -Body '{"fromUserId":1001,"content":"group hello"}'
+```
+
+成员少于 `tim.group.write-fanout-limit`（默认 500）时，群聊按成员写扩散；超过阈值时只追加群消息 ZSet，使用 `/demo/groups/{groupId}/messages/{userId}` 按游标读取。离线缓存容量由 `tim.offline.max-size` 控制（默认 1000）。
+
+推荐阅读顺序：`ObjEncoder/ObjDecoder` → `TIMServerHandle` → `ReliableMessageService` → `RedisRouteService` / `RocketMqNodeMessageBus` → `GroupMessageService`。Netty 负责连接、协议和心跳；ZooKeeper 注册/发现节点；Redis 保存路由、在线、去重和近期离线数据；RocketMQ 转发跨节点消息；MySQL 保存历史及最终幂等约束。
+
+### 当前改造后的权威链路
+
+认证后的 TCP Channel 绑定用户、sessionId 和 epoch；路由统一保存于
+`tim:route:user:{userId}` Hash。CHAT 会覆盖客户端伪造的 senderId，先写
+`im_message` 和 `outbox_event`，再由定时 Relay 投递到目标节点。离线正文只以
+MySQL 为事实来源，Redis `tim:offline:{userId}` 只保存 messageId 和用户递增游标。
+群消息使用 `im_group`、`group_member`、`group_message` 和
+`group_message_inbox`；RocketMQ 的 `TIM_GROUP_BROADCAST` 使用广播消费模式，
+节点只推送本地 `groupId → Channel集合`。
+
+### 验收
+
+先执行 `./mvnw.cmd package`，再执行 `scripts/smoke-test.ps1`（Linux 使用
+`bash scripts/smoke-test.sh`）。Smoke脚本会检查Compose服务、构建两个TIM节点并
+访问 `/actuator/health`。如果Docker daemon未启动，只能执行 `docker compose config`
+和 Maven 测试，不能宣称容器验收通过。

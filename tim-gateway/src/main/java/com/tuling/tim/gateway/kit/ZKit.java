@@ -1,6 +1,5 @@
 package com.tuling.tim.gateway.kit;
 
-import com.alibaba.fastjson.JSON;
 import com.tuling.tim.gateway.cache.ServerCache;
 import org.I0Itec.zkclient.IZkChildListener;
 import org.I0Itec.zkclient.ZkClient;
@@ -60,8 +59,13 @@ public class ZKit {
      */
     public List<String> getAllNode() {
         List<String> children = zkClient.getChildren(zkRoot);
-        logger.info("Query all node =[{}] success.", JSON.toJSONString(children));
+        logger.info("Query all node =[{}] success.", children);
         return children;
+    }
+
+    /** Server registrations carry structured data; child names are stable server ids. */
+    public String getNodeData(String child) {
+        return zkClient.readData(zkRoot + "/" + child, true);
     }
 
 

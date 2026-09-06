@@ -1,7 +1,7 @@
 package com.tuling.tim.common.data.construct;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
@@ -26,7 +26,7 @@ public class TrieTreeTest {
             System.out.println(s);
         }
 
-        Assert.assertTrue("ABC,abC,".equals(result));
+        Assertions.assertTrue("ABC,abC,".equals(result));
 
     }
 
@@ -42,7 +42,7 @@ public class TrieTreeTest {
             System.out.println(s);
         }
 
-        //Assert.assertTrue("ABC,abC,".equals(result));
+        //Assertions.assertTrue("ABC,abC,".equals(result));
 
     }
 
@@ -62,7 +62,7 @@ public class TrieTreeTest {
             System.out.println(s);
         }
 
-        Assert.assertTrue(result.equals("java,javascript,"));
+        Assertions.assertTrue(result.equals("java,javascript,"));
 
     }
 
@@ -82,7 +82,7 @@ public class TrieTreeTest {
             System.out.println(s);
         }
 
-        Assert.assertTrue(result.equals("java,javascript,jsf,jsp,"));
+        Assertions.assertTrue(result.equals("java,javascript,jsf,jsp,"));
 
     }
 
@@ -102,7 +102,7 @@ public class TrieTreeTest {
             System.out.println(s);
         }
 
-        Assert.assertTrue(result.equals("jsf,jsp,"));
+        Assertions.assertTrue(result.equals("jsf,jsp,"));
 
     }
 
@@ -122,7 +122,7 @@ public class TrieTreeTest {
             System.out.println(s);
         }
 
-        Assert.assertTrue(result.equals("java,javascript,"));
+        Assertions.assertTrue(result.equals("java,javascript,"));
 
     }
 
@@ -142,7 +142,7 @@ public class TrieTreeTest {
             System.out.println(s);
         }
 
-        Assert.assertTrue(result.equals("jsf,jsp,"));
+        Assertions.assertTrue(result.equals("jsf,jsp,"));
 
     }
 
@@ -181,7 +181,7 @@ public class TrieTreeTest {
         for (String s : ab) {
             System.out.println(s);
         }
-        Assert.assertTrue(ab.size() == 0);
+        Assertions.assertTrue(ab.size() == 0);
     }
 
     @Test
@@ -195,7 +195,7 @@ public class TrieTreeTest {
         for (String s : ab) {
             System.out.println(s);
         }
-        Assert.assertTrue(ab.size() == 1);
+        Assertions.assertTrue(ab.size() == 1);
     }
 
     @Test
@@ -211,7 +211,7 @@ public class TrieTreeTest {
             result += s + ",";
             System.out.println(s);
         }
-        Assert.assertTrue(result.equals("Cde,"));
+        Assertions.assertTrue(result.equals("Cde,"));
     }
 
     @Test
@@ -243,7 +243,7 @@ public class TrieTreeTest {
             result += s + ",";
             System.out.println(s);
         }
-        Assert.assertTrue(result.equals("Cde,Cdfff,"));
+        Assertions.assertTrue(result.equals("Cde,Cdfff,"));
     }
 
     @Test
@@ -261,7 +261,7 @@ public class TrieTreeTest {
             result += s + ",";
             System.out.println(s);
         }
-        Assert.assertTrue(result.equals("CDa,CDfff,"));
+        Assertions.assertTrue(result.equals("CDa,CDfff,"));
     }
 
     @Test
@@ -279,7 +279,7 @@ public class TrieTreeTest {
             result += s + ",";
             System.out.println(s);
         }
-        Assert.assertTrue(result.equals(""));
+        Assertions.assertTrue(result.equals(""));
     }
 
     @Test
@@ -292,7 +292,7 @@ public class TrieTreeTest {
             result += s + ",";
             System.out.println(s);
         }
-        Assert.assertTrue(result.equals(""));
+        Assertions.assertTrue(result.equals(""));
     }
 
 
@@ -311,7 +311,7 @@ public class TrieTreeTest {
             result += s + ",";
             System.out.println(s);
         }
-        Assert.assertTrue(result.equals(""));
+        Assertions.assertTrue(result.equals(""));
     }
 
 

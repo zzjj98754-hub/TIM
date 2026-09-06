@@ -1,11 +1,11 @@
 package com.tuling.tim.server.test;
 
 
-import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tuling.tim.client.vo.res.OnlineUsersResVO;
 import com.tuling.tim.client.vo.res.TIMServerResVO;
 import com.vdurmont.emoji.EmojiParser;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,13 +23,14 @@ import java.util.List;
 public class CommonTest {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(CommonTest.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
-    public void test() {
+    public void test() throws Exception {
 
-        String json = "{\"code\":\"9000\",\"message\":\"成功\",\"reqNo\":null,\"dataBody\":{\"ip\":\"127.0.0.1\",\"port\":8081}}";
+        String json = "{\"code\":\"9000\",\"message\":\"成功\",\"reqNo\":null,\"dataBody\":{\"ip\":\"127.0.0.1\",\"timServerPort\":8081,\"httpPort\":8082}}";
 
-        TIMServerResVO timServerResVO = JSON.parseObject(json, TIMServerResVO.class);
+        TIMServerResVO timServerResVO = OBJECT_MAPPER.readValue(json, TIMServerResVO.class);
 
         System.out.println(timServerResVO.toString());
 
@@ -39,7 +40,7 @@ public class CommonTest {
     }
 
     @Test
-    public void onlineUser() {
+    public void onlineUser() throws Exception {
         List<OnlineUsersResVO.DataBodyBean> onlineUsers = new ArrayList<>(64);
 
         OnlineUsersResVO.DataBodyBean bodyBean = new OnlineUsersResVO.DataBodyBean();
@@ -53,7 +54,7 @@ public class CommonTest {
         bodyBean.setUserName("tuling");
         onlineUsers.add(bodyBean);
 
-        LOGGER.info("list={}", JSON.toJSONString(onlineUsers));
+        LOGGER.info("list={}", OBJECT_MAPPER.writeValueAsString(onlineUsers));
 
         LOGGER.info("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
 

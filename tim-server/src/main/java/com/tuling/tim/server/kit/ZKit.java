@@ -45,4 +45,8 @@ public class ZKit {
         zkClient.createEphemeral(path);
     }
 
+    public void createNode(String path, String data) {
+        zkClient.createEphemeral(path, data);
+    }
+
 }

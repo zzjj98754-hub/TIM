@@ -1,6 +1,6 @@
 package com.tuling.tim.common.data.construct;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.SortedMap;
 import java.util.TreeMap;

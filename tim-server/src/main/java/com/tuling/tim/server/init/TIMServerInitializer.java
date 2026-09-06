@@ -9,6 +9,7 @@ import com.tuling.tim.server.util.SpringBeanFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
 /**
  * @since JDK 1.8
@@ -24,6 +25,8 @@ public class TIMServerInitializer extends ChannelInitializer<Channel> {
         ch.pipeline()
                 // 根据配置没有收到客户端发送消息或心跳就触发读空闲
                 .addLast(new IdleStateHandler((int) configuration.getHeartBeatTime(), 0, 0))
+                // Header: magic(4) + version(1) + type(1) + requestId(8) + bodyLength(4).
+                .addLast(new LengthFieldBasedFrameDecoder(1024 * 1024, 14, 4, 0, 0))
                 .addLast(new ObjEncoder(TIMReqMsg.class))
                 .addLast(new ObjDecoder(TIMReqMsg.class))
                 .addLast(timServerHandle);

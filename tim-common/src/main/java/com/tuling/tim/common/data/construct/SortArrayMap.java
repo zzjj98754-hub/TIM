@@ -1,7 +1,6 @@
 package com.tuling.tim.common.data.construct;
 
 import java.util.Arrays;
-import java.util.Comparator;
 
 /**
  * 根据 key 排序的 Map
@@ -76,16 +75,7 @@ public class SortArrayMap {
      * 排序
      */
     public void sort() {
-        Arrays.sort(buckets, 0, size, new Comparator<Node>() {
-            @Override
-            public int compare(Node o1, Node o2) {
-                if (o1.key > o2.key) {
-                    return 1;
-                } else {
-                    return -1;
-                }
-            }
-        });
+        Arrays.sort(buckets, 0, size, (left, right) -> Long.compare(left.key, right.key));
     }
 
     public void print() {

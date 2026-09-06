@@ -65,14 +65,16 @@ public class UserInfoCacheServiceImpl implements UserInfoCacheService {
 
     @Override
     public Set<TIMUserInfo> onlineUser() {
-        Set<TIMUserInfo> set = null;
+        Set<TIMUserInfo> set = new HashSet<>(64);
         Set<String> members = redisTemplate.opsForSet().members(LOGIN_STATUS_PREFIX);
+        if (members == null) {
+            return set;
+        }
         for (String member : members) {
-            if (set == null) {
-                set = new HashSet<>(64);
-            }
             TIMUserInfo timUserInfo = loadUserInfoByUserId(Long.valueOf(member));
-            set.add(timUserInfo);
+            if (timUserInfo != null) {
+                set.add(timUserInfo);
+            }
         }
 
         return set;

@@ -37,8 +37,10 @@ public class RegistryZK implements Runnable {
 
         //是否要将自己注册到 ZK
         if (appConfiguration.isZkSwitch()){
-            String path = appConfiguration.getZkRoot() + "/ip-" + ip + ":" + timServerPort + ":" + httpPort;
-            zKit.createNode(path);
+            String path = appConfiguration.getZkRoot() + "/" + appConfiguration.getServerId();
+            String data = "{\"serverId\":\"" + appConfiguration.getServerId() + "\",\"host\":\"" + ip
+                    + "\",\"tcpPort\":" + timServerPort + ",\"httpPort\":" + httpPort + "}";
+            zKit.createNode(path, data);
             logger.info("Registry zookeeper success, msg=[{}]", path);
         }
 

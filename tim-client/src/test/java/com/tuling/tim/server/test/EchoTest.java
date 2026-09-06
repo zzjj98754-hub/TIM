@@ -1,7 +1,7 @@
 package com.tuling.tim.server.test;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 /**
  *
@@ -15,7 +15,7 @@ public class EchoTest {
 
         String log = log(msg, place);
         System.out.println(log);
-        Assert.assertEquals(log,"zhangsan say,you haha");
+        Assertions.assertEquals(log,"zhangsan say,you haha");
     }
 
     @Test
@@ -25,7 +25,7 @@ public class EchoTest {
 
         String log = log(msg, place);
         System.out.println(log);
-        Assert.assertEquals(log,"zhangsan say,you haha,zhangsan say nihao");
+        Assertions.assertEquals(log,"zhangsan say,you haha,zhangsan say nihao");
     }
 
     @Test
@@ -35,7 +35,7 @@ public class EchoTest {
 
         String log = log(msg, place);
         System.out.println(log);
-        Assert.assertEquals(log,"see you zhangsan,zhangsan say");
+        Assertions.assertEquals(log,"see you zhangsan,zhangsan say");
     }
     @Test
     public void echo4() {
@@ -44,7 +44,7 @@ public class EchoTest {
 
         String log = log(msg, place);
         System.out.println(log);
-        Assert.assertEquals(log,"!!!see you,zhangsan say");
+        Assertions.assertEquals(log,"!!!see you,zhangsan say");
     }
     @Test
     public void echo5() {
@@ -53,7 +53,7 @@ public class EchoTest {
 
         String log = log(msg, place);
         System.out.println(log);
-        Assert.assertEquals(log,"see you,zhangsan say!!!");
+        Assertions.assertEquals(log,"see you,zhangsan say!!!");
     }
 
     @Test
@@ -63,7 +63,7 @@ public class EchoTest {
 
         String log = log(msg, place);
         System.out.println(log);
-        Assert.assertEquals(log,"see you,zhangsan say");
+        Assertions.assertEquals(log,"see you,zhangsan say");
     }
 
     private String log(String msg, String... place) {

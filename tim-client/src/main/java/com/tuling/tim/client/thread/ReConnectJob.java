@@ -6,6 +6,7 @@ import com.tuling.tim.common.kit.HeartBeatHandler;
 import io.netty.channel.ChannelHandlerContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.tuling.tim.client.service.ReConnectManager;
 
 /**
  *
@@ -18,9 +19,15 @@ public class ReConnectJob implements Runnable {
     private ChannelHandlerContext context ;
 
     private HeartBeatHandler heartBeatHandler ;
+    private final ReConnectManager manager;
 
     public ReConnectJob(ChannelHandlerContext context) {
+        this(context, null);
+    }
+
+    public ReConnectJob(ChannelHandlerContext context, ReConnectManager manager) {
         this.context = context;
+        this.manager = manager;
         this.heartBeatHandler = SpringBeanFactory.getBean(ClientHeartBeatHandlerImpl.class) ;
     }
 
@@ -30,6 +37,7 @@ public class ReConnectJob implements Runnable {
             heartBeatHandler.process(context);
         } catch (Exception e) {
             LOGGER.error("Exception",e);
+            if (manager != null) manager.reConnect(context);
         }
     }
 }

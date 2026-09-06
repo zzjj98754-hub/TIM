@@ -1,12 +1,13 @@
 package com.tuling.tim.server.kit;
 
-import com.tuling.tim.common.core.proxy.ProxyManager;
 import com.tuling.tim.common.pojo.TIMUserInfo;
-import com.tuling.tim.common.res.BaseResponse;
-import com.tuling.tim.gateway.api.RouteApi;
+import com.tuling.tim.common.util.JsonHttpClient;
 import com.tuling.tim.gateway.api.vo.req.ChatReqVO;
 import com.tuling.tim.server.config.AppConfiguration;
 import com.tuling.tim.server.util.SessionSocketHolder;
+import com.tuling.tim.server.route.RedisRouteService;
+import com.tuling.tim.server.util.SpringBeanFactory;
+import com.tuling.tim.server.util.ConnectionSession;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
@@ -40,7 +41,10 @@ public class RouteHandler {
     public void userOffLine(TIMUserInfo userInfo, NioSocketChannel channel) throws IOException {
         if (userInfo != null) {
             LOGGER.info("Account [{}] offline", userInfo.getUserName());
+            ConnectionSession session = SessionSocketHolder.getSession(channel);
             SessionSocketHolder.removeSession(userInfo.getUserId());
+            if (session != null) SpringBeanFactory.getBean(RedisRouteService.class)
+                    .offline(userInfo.getUserId(), session.getSessionId(), session.getEpoch());
             //清除路由关系
             clearRouteInfo(userInfo);
         }
@@ -56,11 +60,10 @@ public class RouteHandler {
      * @throws IOException
      */
     public void clearRouteInfo(TIMUserInfo userInfo) {
-        RouteApi routeApi = new ProxyManager<>(RouteApi.class, configuration.getGatewayUrl(), okHttpClient).getInstance();
         Response response = null;
         ChatReqVO vo = new ChatReqVO(userInfo.getUserId(), userInfo.getUserName());
         try {
-            response = (Response) routeApi.offLine(vo);
+            response = JsonHttpClient.post(okHttpClient, configuration.getGatewayUrl(), "/offLine", vo);
             if (response == null || !response.isSuccessful()) {
                 throw new IOException("offline request failed");
             }

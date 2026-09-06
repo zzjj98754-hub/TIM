@@ -9,6 +9,7 @@ import com.tuling.tim.common.protocol.TIMReqMsg;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
 /**
  * @since JDK 1.8
@@ -23,6 +24,7 @@ public class TIMClientHandleInitializer extends ChannelInitializer<Channel> {
         ch.pipeline()
                 // 根据配置触发写空闲，执行 TIMClientHandle 的心跳逻辑
                 .addLast(new IdleStateHandler(0, (int) appConfiguration.getHeartBeatTime(), 0))
+                .addLast(new LengthFieldBasedFrameDecoder(1024 * 1024, 14, 4, 0, 0))
                 .addLast(new ObjEncoder(TIMReqMsg.class))
                 .addLast(new ObjDecoder(TIMReqMsg.class))
                 .addLast(TIMClientHandle)

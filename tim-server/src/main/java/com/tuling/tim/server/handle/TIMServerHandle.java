@@ -10,6 +10,12 @@ import com.tuling.tim.server.kit.RouteHandler;
 import com.tuling.tim.server.kit.ServerHeartBeatHandlerImpl;
 import com.tuling.tim.server.util.SessionSocketHolder;
 import com.tuling.tim.server.util.SpringBeanFactory;
+import com.tuling.tim.server.util.ConnectionSession;
+import com.tuling.tim.server.route.RedisRouteService;
+import com.tuling.tim.server.message.ChatMessage;
+import com.tuling.tim.server.message.ReliableMessageService;
+import com.tuling.tim.server.group.GroupMessageService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -17,6 +23,7 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
+import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,8 +78,11 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
         if (msg.getType() == Constants.CommandType.LOGIN) {
             //保存客户端与 Channel 之间的关系
-            SessionSocketHolder.put(msg.getRequestId(), (NioSocketChannel) ctx.channel());
+            String[] session = SessionSocketHolder.put(msg.getRequestId(), (NioSocketChannel) ctx.channel()).split(":", 2);
             SessionSocketHolder.saveSession(msg.getRequestId(), msg.getReqMsg());
+            SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
+                    { SpringBeanFactory.getBean(RedisRouteService.class).online(msg.getRequestId(), session[0], Long.parseLong(session[1]));
+                      SpringBeanFactory.getBean(GroupMessageService.class).restoreLocalMembership(msg.getRequestId(), (NioSocketChannel) ctx.channel()); });
             LOGGER.info("client [{}] online success!!", msg.getReqMsg());
         }
 
@@ -88,6 +98,20 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
                     future.channel().close();
                 }
             });
+        }
+
+        if (msg.getType() == Constants.CommandType.CHAT) {
+            ConnectionSession session = SessionSocketHolder.getSession((NioSocketChannel) ctx.channel());
+            if (session == null) { ctx.close(); return; }
+            ChatMessage chat = SpringBeanFactory.getBean(ObjectMapper.class).readValue(msg.getReqMsg(), ChatMessage.class);
+            chat.setFromUserId(session.getUserId());
+            SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
+                    SpringBeanFactory.getBean(ReliableMessageService.class).accept(chat));
+        }
+
+        if (msg.getType() == Constants.CommandType.ACK) {
+            SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() ->
+                    SpringBeanFactory.getBean(ReliableMessageService.class).acknowledge(msg.getReqMsg()));
         }
 
     }

@@ -21,6 +21,9 @@ public class AppConfiguration {
     @Value("${tim.server.port}")
     private int timServerPort;
 
+    @Value("${tim.server.id:im-server-1}")
+    private String serverId;
+
     @Value("${tim.gateway.url}")
     private String gatewayUrl;
 
@@ -69,6 +72,8 @@ public class AppConfiguration {
     public int getTimServerPort() {
         return timServerPort;
     }
+
+    public String getServerId() { return serverId; }
 
     public void setTimServerPort(int timServerPort) {
         this.timServerPort = timServerPort;

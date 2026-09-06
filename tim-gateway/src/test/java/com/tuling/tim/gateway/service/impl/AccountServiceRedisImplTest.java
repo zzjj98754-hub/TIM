@@ -1,37 +1,30 @@
 package com.tuling.tim.gateway.service.impl;
 
-import com.alibaba.fastjson.JSON;
-import com.tuling.tim.gateway.GatewayApplication;
-import com.tuling.tim.gateway.api.vo.res.TIMServerResVO;
-import com.tuling.tim.gateway.service.AccountService;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.junit4.SpringRunner;
-
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
-@SpringBootTest(classes = GatewayApplication.class)
-@RunWith(SpringRunner.class)
+import com.tuling.tim.common.enums.StatusEnum;
+import com.tuling.tim.common.exception.TIMException;
+import com.tuling.tim.gateway.service.impl.AccountServiceRedisImpl;
+import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.util.ReflectionTestUtils;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 public class AccountServiceRedisImplTest {
 
-    private final static Logger LOGGER = LoggerFactory.getLogger(AccountServiceRedisImplTest.class);
-
-    @Autowired
-    private AccountService accountService;
-
     @Test
-    public void loadRouteRelated() throws Exception {
-        for (int i = 0; i < 100; i++) {
-
-            Map<Long, TIMServerResVO> longTIMServerResVOMap = accountService.loadRouteRelated();
-            LOGGER.info("longTIMServerResVOMap={},cun={}", JSON.toJSONString(longTIMServerResVOMap), i);
+    public void offlineRouteShouldThrowBusinessException() {
+        AccountServiceRedisImpl service = new AccountServiceRedisImpl();
+        RedisTemplate redisTemplate = mock(RedisTemplate.class);
+        ValueOperations values = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(values);
+        when(values.get("tim-route:42")).thenReturn(null);
+        ReflectionTestUtils.setField(service, "redisTemplate", redisTemplate);
+        try {
+            service.loadRouteRelatedByUserId(42L);
+            org.junit.jupiter.api.Assertions.fail("offline route must not be reported as success");
+        } catch (TIMException ex) {
+            org.junit.jupiter.api.Assertions.assertEquals(StatusEnum.OFF_LINE.getCode(), ex.getErrorCode());
         }
-        TimeUnit.SECONDS.sleep(10);
     }
 
 }
