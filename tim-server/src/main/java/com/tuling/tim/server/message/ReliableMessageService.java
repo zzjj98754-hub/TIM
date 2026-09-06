@@ -13,6 +13,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -67,17 +69,20 @@ public class ReliableMessageService {
         if (message.getMessageId() == null || message.getMessageId().isEmpty()) message.setMessageId(ids.nextId());
         if (message.getCreatedAt() == 0) message.setCreatedAt(System.currentTimeMillis());
         if (message.getClientMessageId() == null || message.getClientMessageId().isBlank()) message.setClientMessageId(message.getMessageId());
-        String dedupKey = "tim:dedup:message:" + message.getMessageId();
-        Boolean firstSeen = redis.opsForValue().setIfAbsent(dedupKey, "1", Duration.ofHours(24));
-        if (Boolean.FALSE.equals(firstSeen)) return;
-        try {
-            boolean inserted = history.insertIfAbsent(message, "PENDING");
-            if (!inserted) return;
-            if (deliveries != null) deliveries.createPending(message);
-            outbox.append(message);
-        } catch (RuntimeException e) {
-            redis.delete(dedupKey);
-            throw e;
+        boolean inserted = history.insertIfAbsent(message, "PENDING");
+        if (!inserted) return;
+        if (deliveries != null) deliveries.createPending(message);
+        outbox.append(message);
+        Runnable cacheDedup = () -> {
+            try { redis.opsForValue().set("tim:dedup:message:" + message.getMessageId(), "1", Duration.ofHours(24)); }
+            catch (RuntimeException e) { LOGGER.warn("message dedup cache refresh failed messageId={}", message.getMessageId(), e); }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { cacheDedup.run(); }
+            });
+        } else {
+            cacheDedup.run();
         }
     }
 

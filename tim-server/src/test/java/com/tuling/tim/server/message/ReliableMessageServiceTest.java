@@ -59,13 +59,12 @@ class ReliableMessageServiceTest {
     }
 
     @Test
-    void redisDedupRejectsSecondMessageBeforeDatabase() {
+    void databaseDedupRejectsSecondMessageAfterRedisCacheIsRemoved() {
         StringRedisTemplate redis = mock(StringRedisTemplate.class);
         ValueOperations<String, String> values = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(values);
-        when(values.setIfAbsent(anyString(), anyString(), any())).thenReturn(true, false);
         MessageHistoryRepository history = mock(MessageHistoryRepository.class);
-        when(history.insertIfAbsent(any(ChatMessage.class), eq("PENDING"))).thenReturn(true);
+        when(history.insertIfAbsent(any(ChatMessage.class), eq("PENDING"))).thenReturn(true, false);
         ReliableMessageService service = new ReliableMessageService(mock(RedisRouteService.class), redis, history,
                 new ObjectMapper(), new SnowflakeIdGenerator(), mock(OutboxRepository.class), 3, 5000L, 100);
         ChatMessage message = message("dedup-me");
@@ -73,7 +72,8 @@ class ReliableMessageServiceTest {
         service.accept(message);
         service.accept(message);
 
-        verify(history, times(1)).insertIfAbsent(message, "PENDING");
+        verify(history, times(2)).insertIfAbsent(message, "PENDING");
+        verify(values).set("tim:dedup:message:dedup-me", "1", java.time.Duration.ofHours(24));
     }
 
     private ReliableMessageService newService(RedisRouteService routes, long retryMs) {
