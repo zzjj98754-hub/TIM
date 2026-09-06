@@ -45,7 +45,8 @@ public class ExceptionHandlingController {
         logger.error("unexpected exception", ex);
         BaseResponse baseResponse = new BaseResponse();
         baseResponse.setCode(com.tuling.tim.common.enums.StatusEnum.FAIL.getCode());
-        baseResponse.setMessage(com.tuling.tim.common.enums.StatusEnum.FAIL.getMessage());
+        // Keep the response actionable without exposing credentials, payloads, or stack traces.
+        baseResponse.setMessage("Request failed: " + ex.getClass().getSimpleName());
         return baseResponse;
     }
 
