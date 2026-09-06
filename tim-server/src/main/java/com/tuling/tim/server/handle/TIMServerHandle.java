@@ -106,7 +106,7 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
 
         if (msg.getType() == Constants.CommandType.CHAT || msg.getType() == Constants.CommandType.GROUP_CHAT) {
             ConnectionSession session = SessionSocketHolder.getSession(ctx.channel());
-            if (!isAuthenticated(session)) { ctx.close(); return; }
+            if (!isAuthenticated(session, ctx.channel())) { ctx.close(); return; }
             ChatMessage chat = SpringBeanFactory.getBean(ObjectMapper.class).readValue(msg.getReqMsg(), ChatMessage.class);
             trustSessionIdentity(chat, session);
             SpringBeanFactory.getBean(ThreadPoolExecutor.class).execute(() -> {
@@ -135,8 +135,8 @@ public class TIMServerHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
         message.setFromUserId(session.getUserId());
     }
 
-    static boolean isAuthenticated(ConnectionSession session) {
-        return session != null;
+    static boolean isAuthenticated(ConnectionSession session, io.netty.channel.Channel channel) {
+        return session != null && SessionSocketHolder.isCurrent(session.getUserId(), channel);
     }
 
 

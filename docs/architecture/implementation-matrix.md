@@ -3,7 +3,7 @@
 | 能力 | 状态 | 代码证据与边界 |
 |---|---|---|
 | Netty 长连接、协议、心跳 | IMPLEMENTED | `TIMServer`, `TIMServerInitializer`, `ObjDecoder/ObjEncoder`, `IdleStateHandler`; 连接和中间件运行态待 Compose 验证 |
-| 认证身份与旧连接保护 | IMPLEMENTED | `TIMServerHandle`, `ConnectionSession`, `SessionSocketHolder`, `RedisRouteService`; 业务帧必须先有会话，清理按 session/epoch 匹配 |
+| 认证身份与旧连接保护 | IMPLEMENTED | `TIMServerHandle` 同时校验会话和当前 Channel，`SessionSocketHolder`/`RedisRouteService` 按 session/epoch 清理；旧 Channel 不能继续发业务帧 |
 | ZooKeeper 注册/Watch | IMPLEMENTED | `RegistryZK`, `ZKit`, Gateway `ServerCache`; `/tim/nodes/{nodeId}` 临时节点，根节点并发创建有保护 |
 | Redis 用户路由 | IMPLEMENTED | Gateway 登录只返回候选节点；仅已认证 Netty Session 通过 Lua 原子写入 route Hash/TTL/presence，断开按 session/epoch 原子匹配删除 |
 | 单聊可靠投递 | IMPLEMENTED | `ReliableMessageService`、MySQL `im_message/outbox_event`、RocketMQ node topic、目标节点本地 Channel、ACK/重试 |

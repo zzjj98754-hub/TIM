@@ -2,6 +2,8 @@ package com.tuling.tim.server.handle;
 
 import com.tuling.tim.server.message.ChatMessage;
 import com.tuling.tim.server.util.ConnectionSession;
+import com.tuling.tim.server.util.SessionSocketHolder;
+import io.netty.channel.embedded.EmbeddedChannel;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,7 +23,10 @@ class TIMServerHandleTest {
 
     @Test
     void businessFrameRequiresAuthenticatedSession() {
-        assertFalse(TIMServerHandle.isAuthenticated(null));
-        assertTrue(TIMServerHandle.isAuthenticated(new ConnectionSession(42L, "session", 7L)));
+        assertFalse(TIMServerHandle.isAuthenticated(null, new EmbeddedChannel()));
+        EmbeddedChannel channel = new EmbeddedChannel();
+        assertFalse(TIMServerHandle.isAuthenticated(new ConnectionSession(42L, "session", 7L), channel));
+        SessionSocketHolder.put(42L, channel);
+        assertTrue(TIMServerHandle.isAuthenticated(SessionSocketHolder.getSession(channel), channel));
     }
 }
