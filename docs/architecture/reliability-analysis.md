@@ -2,7 +2,7 @@
 
 ## 单聊链路
 
-`TIMClient` TCP `CHAT` → `TIMServerHandle` → 会话身份校验 → `ReliableMessageService.accept` → Redis 快速去重 → MySQL 消息和 Outbox 事务 → RocketMQ 节点 topic（同节点可直接本地投递）→ 目标节点本地 Channel → 客户端处理成功后 ACK → 服务端更新投递状态；未 ACK 的消息由定时器有限次退避重试，最终进入离线索引。
+`TIMClient` TCP `CHAT` → `TIMServerHandle` → 会话身份校验 → `ReliableMessageService.accept` → MySQL 消息、Delivery 和 Outbox 事务 → 事务提交后写 Redis 快速缓存 → RocketMQ 节点 topic（同节点可直接本地投递）→ 目标节点本地 Channel → 客户端处理成功后 ACK → 服务端更新投递状态；未 ACK 的消息由定时器有限次退避重试，最终进入离线索引。数据库租约是重启恢复依据，JVM Map 仅加速当前节点。
 
 MySQL 是正文和最终幂等事实来源；Redis 只负责快速去重、路由和近期离线索引。Outbox Relay 负责补偿“数据库提交后、MQ 发送前”的窗口。重复 MQ 消费由消息/收件箱唯一约束防止重复落库。
 
@@ -16,7 +16,7 @@ MySQL 是正文和最终幂等事实来源；Redis 只负责快速去重、路�
 
 ## 群消息
 
-普通群写入一份正文并为成员生成唯一 inbox 索引；超大群仅保存正文和 groupSequence，成员通过 `group_member_cursor` 增量读取。群广播使用 RocketMQ `BROADCASTING`，每个节点只处理自己的本地 Channel 集合。
+普通群写入一份正文并批量生成唯一 inbox 索引；超大群仅保存正文和 groupSequence，成员通过 `group_member_cursor` 增量读取。群序号由数据库行锁串行分配，正文/Inbox/Outbox 同事务；Redis 大群索引失败不影响 MySQL 权威拉取。群广播使用 RocketMQ `BROADCASTING`，每个节点只处理自己的本地 Channel 集合。
 
 ## 已验证与未验证
 

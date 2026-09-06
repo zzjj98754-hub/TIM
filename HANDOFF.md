@@ -5,7 +5,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 
 ## Completed in this phase
 - Audited the existing multi-module Java 17 TIM project and preserved all pre-existing user changes.
-- Confirmed the current Maven test suite passes: 43 common, 16 server, 29 client, and 5 gateway tests (93 total).
+- Confirmed the current Maven test suite passes: 102 tests, 0 failures, 0 errors, 0 skips.
 - Confirmed `docker compose config` succeeds.
 - Added Actuator health/metrics exposure to `tim-server`.
 - Added two separately configured TIM service containers to Compose with distinct node IDs, HTTP ports, and Netty ports.
@@ -45,6 +45,10 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 - Fixed Gateway method-validation startup failures by keeping `@Valid` constraints on the `RouteApi` contract instead of redefining them only in `RouteController`.
 - Made TIM nodes recursively create a missing ZooKeeper root path, so a fresh ensemble does not require manual `/im` bootstrap.
 - Made the client's first login attempt explicitly non-reconnect, avoiding null unboxing after a failed Gateway login.
+- Fixed the durable Delivery lease parameter order and replaced MySQL-only lease date expressions with explicit timestamps verified against H2 in MySQL mode.
+- Made restart recovery honor persisted delivery attempt counts and transition exhausted online delivery to OFFLINE instead of retrying forever.
+- Added database-backed Delivery/Outbox backlog gauges and group fanout duration timing.
+- Changed ordinary-group Inbox writes to JDBC batches; group message/Inbox/Outbox rollback and concurrent sequence allocation now have transaction-level tests. Large-group reads use MySQL as the authoritative source when Redis projection is unavailable.
 
 ## Files changed in this phase
 - `tim-server/pom.xml`
@@ -62,7 +66,7 @@ Enterprise reliability v2 is in progress on `codex/enterprise-reliability-v2`; a
 
 ## Validation
 - `./mvnw.cmd test`: latest run exited 0; 93 tests, 0 failures, 0 errors, 0 skipped.
-- `./mvnw.cmd verify`: latest run exited 0 after the Gateway/ZooKeeper/client startup fixes.
+- `./mvnw.cmd verify`: latest run exited 0 after the Delivery lease, reliability metrics, and transactional group-fanout fixes (102 tests).
 - `docker compose config`: latest run exited 0.
 - `./mvnw.cmd -q verify -DskipTests`: latest run exited 0.
 - `./mvnw.cmd -q -pl tim-server -am -Dtest=BeanConfigTest -Dsurefire.failIfNoSpecifiedTests=false test`: latest run exited 0.
