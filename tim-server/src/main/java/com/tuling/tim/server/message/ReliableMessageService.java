@@ -68,9 +68,25 @@ public class ReliableMessageService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setMetrics(MeterRegistry metrics) {
         this.metrics = metrics;
-        io.micrometer.core.instrument.Gauge.builder("tim_delivery_pending", pending, Map::size).register(metrics);
+        for (String counter : List.of("tim_message_accept_total", "tim_message_ack_total", "tim_message_retry_total",
+                "tim_message_offline_total", "tim_message_dead_total")) metrics.counter(counter);
+        io.micrometer.core.instrument.Gauge.builder("tim_delivery_pending", this, ReliableMessageService::deliveryPending).register(metrics);
+        io.micrometer.core.instrument.Gauge.builder("tim_delivery_oldest_seconds", this, ReliableMessageService::deliveryOldestSeconds).register(metrics);
+        io.micrometer.core.instrument.Gauge.builder("tim_outbox_pending", this, ReliableMessageService::outboxPending).register(metrics);
+        io.micrometer.core.instrument.Gauge.builder("tim_outbox_dead", this, ReliableMessageService::outboxDead).register(metrics);
     }
     private void count(String name) { if (metrics != null) metrics.counter(name).increment(); }
+    private double deliveryPending() { return metricValue(() -> deliveries == null ? pending.size() : deliveries.pendingCount()); }
+    private double deliveryOldestSeconds() { return metricValue(() -> deliveries == null ? 0D : deliveries.oldestPendingSeconds()); }
+    private double outboxPending() { return metricValue(outbox::pendingCount); }
+    private double outboxDead() { return metricValue(outbox::deadCount); }
+    private double metricValue(java.util.function.DoubleSupplier supplier) {
+        try { return supplier.getAsDouble(); }
+        catch (RuntimeException e) {
+            LOGGER.warn("reliability gauge query failed", e);
+            return Double.NaN;
+        }
+    }
 
     @Transactional
     public void accept(ChatMessage message) {
@@ -138,14 +154,17 @@ public class ReliableMessageService {
         long now = System.currentTimeMillis();
         pending.forEach((id, delivery) -> {
             if (delivery.getNextRetryAt() > now) return;
-            if (delivery.getAttempts() >= maxRetries) { pending.remove(id); count("tim_message_dead_total"); if (deliveries != null) deliveries.markOffline(delivery.getMessage().getMessageId(), delivery.getMessage().getToUserId()); saveOffline(delivery.getMessage(), "retry exhausted"); return; }
+            if (delivery.getAttempts() >= maxRetries) { pending.remove(id); if (deliveries != null) deliveries.markOffline(delivery.getMessage().getMessageId(), delivery.getMessage().getToUserId()); saveOffline(delivery.getMessage(), "retry exhausted"); return; }
             delivery.incrementAttempts(now + retryMs);
             count("tim_message_retry_total");
             dispatch(delivery.getMessage());
         });
         if (deliveries != null) {
             for (DeliveryRepository.DeliveryCandidate candidate : deliveries.claimDue(100, deliveryWorkerId, retryMs + 60_000L)) {
-                if (!pending.containsKey(candidate.messageId())) dispatch(deliveries.readMessage(candidate));
+                if (pending.containsKey(candidate.messageId())) continue;
+                ChatMessage recovered = deliveries.readMessage(candidate);
+                if (candidate.attemptCount() >= maxRetries) saveOffline(recovered, "durable retry exhausted");
+                else dispatch(recovered);
             }
         }
     }

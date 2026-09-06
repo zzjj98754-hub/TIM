@@ -4,6 +4,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 
 /** Durable ACK state; the JVM pending map is only a delivery acceleration cache. */
@@ -23,8 +25,8 @@ public class DeliveryRepository {
     }
 
     public void markDelivering(String messageId, long recipientId, long nextRetryAt) {
-        jdbc.update("UPDATE message_delivery SET status='" + DELIVERING + "', attempt_count=attempt_count+1, next_retry_at=FROM_UNIXTIME(? / 1000), updated_at=CURRENT_TIMESTAMP WHERE message_id=? AND recipient_id=? AND status IN ('" + PENDING + "','" + DELIVERING + "')",
-                nextRetryAt, messageId, recipientId);
+        jdbc.update("UPDATE message_delivery SET status='" + DELIVERING + "', attempt_count=attempt_count+1, next_retry_at=?, updated_at=CURRENT_TIMESTAMP WHERE message_id=? AND recipient_id=? AND status IN ('" + PENDING + "','" + DELIVERING + "')",
+                Timestamp.from(Instant.ofEpochMilli(nextRetryAt)), messageId, recipientId);
     }
 
     public boolean acknowledge(String messageId, long recipientId) {
@@ -40,16 +42,27 @@ public class DeliveryRepository {
     public List<DeliveryCandidate> claimDue(int limit, String owner, long leaseMs) {
         List<DeliveryCandidate> claimed = new java.util.ArrayList<>();
         List<DeliveryCandidate> candidates = jdbc.query(
-                "SELECT d.message_id, d.recipient_id, m.body FROM message_delivery d JOIN im_message m ON m.message_id=d.message_id " +
+                "SELECT d.message_id, d.recipient_id, m.body, d.attempt_count FROM message_delivery d JOIN im_message m ON m.message_id=d.message_id " +
                         "WHERE d.status IN ('" + PENDING + "','" + DELIVERING + "') AND d.next_retry_at <= CURRENT_TIMESTAMP " +
                         "AND (d.lease_until IS NULL OR d.lease_until <= CURRENT_TIMESTAMP) ORDER BY d.next_retry_at LIMIT ?",
-                (rs, row) -> new DeliveryCandidate(rs.getString(1), rs.getLong(2), rs.getString(3)), limit);
+                (rs, row) -> new DeliveryCandidate(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getInt(4)), limit);
         for (DeliveryCandidate candidate : candidates) {
-            int updated = jdbc.update("UPDATE message_delivery SET lease_owner=?, lease_until=DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? SECOND), updated_at=CURRENT_TIMESTAMP WHERE message_id=? AND recipient_id=? AND status IN ('" + PENDING + "','" + DELIVERING + "') AND (lease_until IS NULL OR lease_until <= CURRENT_TIMESTAMP)",
-                    Math.max(1L, leaseMs / 1000L), owner, candidate.messageId(), candidate.recipientId());
+            Timestamp leaseUntil = Timestamp.from(Instant.now().plusMillis(Math.max(1L, leaseMs)));
+            int updated = jdbc.update("UPDATE message_delivery SET lease_owner=?, lease_until=?, updated_at=CURRENT_TIMESTAMP WHERE message_id=? AND recipient_id=? AND status IN ('" + PENDING + "','" + DELIVERING + "') AND (lease_until IS NULL OR lease_until <= CURRENT_TIMESTAMP)",
+                    owner, leaseUntil, candidate.messageId(), candidate.recipientId());
             if (updated == 1) claimed.add(candidate);
         }
         return claimed;
+    }
+
+    public long pendingCount() {
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM message_delivery WHERE status IN ('" + PENDING + "','" + DELIVERING + "')", Long.class);
+        return count == null ? 0L : count;
+    }
+
+    public double oldestPendingSeconds() {
+        Timestamp oldest = jdbc.queryForObject("SELECT MIN(created_at) FROM message_delivery WHERE status IN ('" + PENDING + "','" + DELIVERING + "')", Timestamp.class);
+        return oldest == null ? 0D : Math.max(0D, (System.currentTimeMillis() - oldest.getTime()) / 1000D);
     }
 
     public ChatMessage readMessage(DeliveryCandidate candidate) {
@@ -57,5 +70,5 @@ public class DeliveryRepository {
         catch (Exception e) { throw new IllegalStateException("deserialize durable delivery " + candidate.messageId(), e); }
     }
 
-    public record DeliveryCandidate(String messageId, long recipientId, String body) { }
+    public record DeliveryCandidate(String messageId, long recipientId, String body, int attemptCount) { }
 }
