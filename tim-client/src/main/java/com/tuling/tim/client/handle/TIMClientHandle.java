@@ -160,7 +160,7 @@ public class TIMClientHandle extends SimpleChannelInboundHandler<TIMReqMsg> {
             if (deliveryCursor > 0L) {
                 if (offlineCursorStore == null) offlineCursorStore = SpringBeanFactory.getBean(OfflineCursorStore.class);
                 offlineCursorStore.advance(deliveryCursor);
-                ctx.writeAndFlush(new TIMReqMsg(0L, "OFFLINE:" + deliveryCursor, Constants.CommandType.ACK));
+                ctx.writeAndFlush(new TIMReqMsg(0L, "OFFLINE:" + offlineCursorStore.current(), Constants.CommandType.ACK));
             }
         } catch (Exception e) {
             LOGGER.warn("cannot ACK malformed chat payload", e);
