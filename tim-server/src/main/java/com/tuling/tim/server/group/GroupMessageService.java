@@ -4,6 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tuling.tim.server.message.ChatMessage;
 import com.tuling.tim.server.message.ReliableMessageService;
 import com.tuling.tim.server.message.OutboxRepository;
+import com.tuling.tim.server.message.SnowflakeIdGenerator;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.tuling.tim.server.mq.NodeMessageBus;
@@ -16,18 +22,27 @@ import com.tuling.tim.server.util.SessionSocketHolder;
 import io.netty.channel.Channel;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /** Small groups write-diffuse; large groups append once and are read by member cursor. */
 @Service
 public class GroupMessageService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GroupMessageService.class);
     private final StringRedisTemplate redis;
     private final ObjectMapper json;
     private final JdbcTemplate jdbc;
     private final OutboxRepository outbox;
     private final GroupFanoutStrategySelector strategySelector;
+    private final SnowflakeIdGenerator ids;
+    private Timer fanoutTimer;
+    @Autowired
     public GroupMessageService(StringRedisTemplate redis, ReliableMessageService messages, ObjectMapper json, JdbcTemplate jdbc, NodeMessageBus bus, OutboxRepository outbox,
-                               GroupFanoutStrategySelector strategySelector) {
-        this.redis = redis; this.json = json; this.jdbc = jdbc; this.outbox = outbox; this.strategySelector = strategySelector;
+                               GroupFanoutStrategySelector strategySelector, SnowflakeIdGenerator ids) {
+        this.redis = redis; this.json = json; this.jdbc = jdbc; this.outbox = outbox; this.strategySelector = strategySelector; this.ids = ids;
+    }
+    @Autowired(required = false)
+    void setMetrics(MeterRegistry registry) {
+        this.fanoutTimer = Timer.builder("tim_group_fanout_duration").register(registry);
     }
     public void addMember(long groupId, long userId) {
         jdbc.update("INSERT INTO im_group (group_id, name, created_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE group_id=group_id", groupId, "group-" + groupId);
@@ -47,35 +62,44 @@ public class GroupMessageService {
     }
     @Transactional
     public String send(ChatMessage source) {
-        List<Long> members = jdbc.queryForList("SELECT user_id FROM group_member WHERE group_id=?", Long.class, source.getGroupId());
-        if (!members.contains(source.getFromUserId())) throw new IllegalArgumentException("sender is not a group member");
-        String messageId = source.getMessageId() == null ? String.valueOf(System.currentTimeMillis()) : source.getMessageId();
-        source.setMessageId(messageId);
-        long sequence = nextSequence(source.getGroupId());
-        jdbc.update("INSERT INTO group_message (message_id, group_id, group_sequence, sender_id, content, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", messageId, source.getGroupId(), sequence, source.getFromUserId(), source.getContent());
-        if (strategySelector.select(members.size()) == GroupFanoutStrategy.WRITE) {
-            for (Long member : members) jdbc.update("INSERT INTO group_message_inbox (group_id, user_id, message_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", source.getGroupId(), member, messageId);
-            outbox.appendGroup(source);
-            return "WRITE_FANOUT";
-        }
+        long started = System.nanoTime();
         try {
-            redis.opsForZSet().add("im:group:messages:" + source.getGroupId(), messageId, sequence);
+            List<Long> members = jdbc.queryForList("SELECT user_id FROM group_member WHERE group_id=?", Long.class, source.getGroupId());
+            if (!members.contains(source.getFromUserId())) throw new IllegalArgumentException("sender is not a group member");
+            String messageId = source.getMessageId() == null ? ids.nextId() : source.getMessageId();
+            source.setMessageId(messageId);
+            long sequence = nextSequence(source.getGroupId());
+            source.setGroupSequence(sequence);
+            jdbc.update("INSERT INTO group_message (message_id, group_id, group_sequence, sender_id, content, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", messageId, source.getGroupId(), sequence, source.getFromUserId(), source.getContent());
+            if (strategySelector.select(members.size()) == GroupFanoutStrategy.WRITE) {
+                jdbc.batchUpdate("INSERT INTO group_message_inbox (group_id, user_id, message_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id",
+                        members, 500, (statement, member) -> {
+                            statement.setLong(1, source.getGroupId());
+                            statement.setLong(2, member);
+                            statement.setString(3, messageId);
+                        });
+                outbox.appendGroup(source);
+                return "WRITE_FANOUT";
+            }
+            try {
+                redis.opsForZSet().add("im:group:messages:" + source.getGroupId(), messageId, sequence);
+            } catch (RuntimeException e) {
+                LOGGER.warn("group Redis projection deferred groupId={} messageId={}", source.getGroupId(), messageId, e);
+            }
             outbox.appendGroup(source);
             return "READ_FANOUT";
-        } catch (Exception e) { throw new IllegalStateException("store group message", e); }
+        } finally {
+            if (fanoutTimer != null) fanoutTimer.record(System.nanoTime() - started, TimeUnit.NANOSECONDS);
+        }
     }
     public List<String> pull(long groupId, long userId, long cursor, int limit) {
         if (jdbc.queryForObject("SELECT COUNT(*) FROM group_member WHERE group_id=? AND user_id=?", Integer.class, groupId, userId) == 0) throw new IllegalArgumentException("user is not a group member");
-        List<String> ids = new ArrayList<>(redis.opsForZSet().rangeByScore("im:group:messages:" + groupId, cursor + 1, Double.MAX_VALUE, 0, limit));
-        if (ids.isEmpty()) {
-            Integer memberCount = jdbc.queryForObject("SELECT COUNT(*) FROM group_member WHERE group_id=?", Integer.class, groupId);
-            if (memberCount != null && strategySelector.select(memberCount) == GroupFanoutStrategy.READ) {
-                // Large groups have no per-member inbox rows. MySQL remains
-                // the durable source when the Redis read index is incomplete.
-                ids = jdbc.queryForList("SELECT message_id FROM group_message WHERE group_id=? AND group_sequence>? ORDER BY group_sequence LIMIT ?", String.class, groupId, cursor, limit);
-            } else {
-                ids = jdbc.queryForList("SELECT gm.message_id FROM group_message_inbox i JOIN group_message gm ON gm.message_id=i.message_id WHERE i.group_id=? AND i.user_id=? AND gm.group_sequence>? ORDER BY gm.group_sequence LIMIT ?", String.class, groupId, userId, cursor, limit);
-            }
+        Integer memberCount = jdbc.queryForObject("SELECT COUNT(*) FROM group_member WHERE group_id=?", Integer.class, groupId);
+        List<String> ids;
+        if (memberCount != null && strategySelector.select(memberCount) == GroupFanoutStrategy.READ) {
+            ids = jdbc.queryForList("SELECT message_id FROM group_message WHERE group_id=? AND group_sequence>? ORDER BY group_sequence LIMIT ?", String.class, groupId, cursor, limit);
+        } else {
+            ids = jdbc.queryForList("SELECT gm.message_id FROM group_message_inbox i JOIN group_message gm ON gm.message_id=i.message_id WHERE i.group_id=? AND i.user_id=? AND gm.group_sequence>? ORDER BY gm.group_sequence LIMIT ?", String.class, groupId, userId, cursor, limit);
         }
         List<String> bodies = loadBodies(ids, groupId);
         return bodies;
