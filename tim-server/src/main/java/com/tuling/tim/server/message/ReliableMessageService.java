@@ -138,6 +138,13 @@ public class ReliableMessageService {
     public void saveOffline(ChatMessage message, String reason) {
         try {
             String key = "im:offline:" + message.getToUserId();
+            Long existingCursor = history.findOfflineCursor(message.getToUserId(), message.getMessageId());
+            if (existingCursor != null) {
+                redis.opsForZSet().add(key, message.getMessageId(), existingCursor.doubleValue());
+                redis.expire(key, Duration.ofDays(7));
+                if (deliveries != null) deliveries.markOffline(message.getMessageId(), message.getToUserId());
+                return;
+            }
             // messageId is the idempotent member; a per-user cursor is assigned by Redis.
             Long cursor = redis.opsForValue().increment("im:offline:cursor:" + message.getToUserId());
             long deliveryCursor = cursor == null ? 0L : cursor;

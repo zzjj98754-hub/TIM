@@ -34,6 +34,10 @@ public class MessageHistoryRepository {
     public void indexOffline(long userId, long cursor, String messageId) {
         jdbc.update("INSERT INTO offline_message_index (user_id, delivery_cursor, message_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE message_id=message_id", userId, cursor, messageId);
     }
+    public Long findOfflineCursor(long userId, String messageId) {
+        List<Long> cursors = jdbc.queryForList("SELECT delivery_cursor FROM offline_message_index WHERE user_id=? AND message_id=?", Long.class, userId, messageId);
+        return cursors.isEmpty() ? null : cursors.get(0);
+    }
     public List<String> findBodies(Collection<String> messageIds) {
         if (messageIds == null || messageIds.isEmpty()) return List.of();
         String placeholders = String.join(",", java.util.Collections.nCopies(messageIds.size(), "?"));
