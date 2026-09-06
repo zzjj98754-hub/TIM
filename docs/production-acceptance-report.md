@@ -9,7 +9,7 @@
 
 ## 运行态边界
 
-本环境 Docker CLI 存在，但 Docker Linux daemon 的 named pipe 不可连接；因此没有将双节点启动、Actuator、Redis、MySQL、ZooKeeper、RocketMQ、跨节点私聊或群广播写成“已通过”。可用 Docker 环境执行：
+最新尝试中 Docker Linux daemon 可用，但构建 TIM 节点时无法从 Docker Hub 获取 `eclipse-temurin:17-jre-jammy` 的 OAuth token，故没有将双节点启动、Actuator、Redis、MySQL、ZooKeeper、RocketMQ、跨节点私聊或群广播写成“已通过”。在具备镜像访问或预拉取镜像的环境执行：
 
 ```powershell
 ./scripts/smoke-test.ps1
@@ -19,4 +19,4 @@
 
 ## 当前结论
 
-核心代码链路和自动化单元测试已落地，配置与文档已对齐；最终的多节点运行态验收受 Docker daemon 环境阻塞，不能替代性宣称完成。
+核心代码链路和自动化单元测试已落地，配置与文档已对齐；最终的多节点运行态验收受 Docker Hub 镜像访问阻塞，不能替代性宣称完成。
