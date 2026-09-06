@@ -13,6 +13,7 @@
 | 离线消息 | IMPLEMENTED | MySQL 正文/索引 + `im:offline:{userId}` ZSet；游标分页、ACK 后推进、容量/TTL、MySQL 回退 |
 | 普通群写扩散 | IMPLEMENTED | `WriteFanoutStrategy`, `group_message_inbox`；成员索引唯一，正文不按成员复制 |
 | 超大群读扩散 | IMPLEMENTED | `ReadFanoutStrategy`, `group_member_cursor`；单份正文与成员读取游标 |
+| 群成员权限与序号 | IMPLEMENTED | `GroupMessageService` 以 MySQL `group_member` 校验权限/规模，事务锁定 `group_sequence` 生成多节点安全序号 |
 | 群节点广播 | IMPLEMENTED | `TIM_GROUP_BROADCAST` + RocketMQ `BROADCASTING` + `GroupChannelPushService` 本地集合 |
 | 业务线程池隔离与指标 | IMPLEMENTED | `BeanConfig` 有界 `ArrayBlockingQueue`、显式拒绝策略；Actuator 暴露 active/queue/pool/completed/rejected |
 | 双节点 Compose | DEFINED | `docker-compose.yml` 含依赖、健康检查和两个节点；本环境 Docker daemon 不可用，运行态未验证 |

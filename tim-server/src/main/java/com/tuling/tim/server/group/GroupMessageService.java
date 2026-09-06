@@ -8,10 +8,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.tuling.tim.server.mq.NodeMessageBus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import com.tuling.tim.server.util.SessionSocketHolder;
 import io.netty.channel.Channel;
 import java.util.HashMap;
@@ -45,15 +45,16 @@ public class GroupMessageService {
         Channel channel = SessionSocketHolder.get(userId);
         if (channel != null) SessionSocketHolder.leaveGroup(groupId, channel);
     }
+    @Transactional
     public String send(ChatMessage source) {
-        Set<String> members = redis.opsForSet().members(membersKey(source.getGroupId()));
-        if (members == null || !members.contains(String.valueOf(source.getFromUserId()))) throw new IllegalArgumentException("sender is not a group member");
+        List<Long> members = jdbc.queryForList("SELECT user_id FROM group_member WHERE group_id=?", Long.class, source.getGroupId());
+        if (!members.contains(source.getFromUserId())) throw new IllegalArgumentException("sender is not a group member");
         String messageId = source.getMessageId() == null ? String.valueOf(System.currentTimeMillis()) : source.getMessageId();
         source.setMessageId(messageId);
         long sequence = nextSequence(source.getGroupId());
         jdbc.update("INSERT INTO group_message (message_id, group_id, group_sequence, sender_id, content, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", messageId, source.getGroupId(), sequence, source.getFromUserId(), source.getContent());
         if (members.size() < writeFanoutLimit) {
-            for (String member : members) jdbc.update("INSERT INTO group_message_inbox (group_id, user_id, message_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", source.getGroupId(), Long.parseLong(member), messageId);
+            for (Long member : members) jdbc.update("INSERT INTO group_message_inbox (group_id, user_id, message_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE message_id=message_id", source.getGroupId(), member, messageId);
             bus.broadcastGroup(source);
             return "WRITE_FANOUT";
         }
@@ -64,10 +65,10 @@ public class GroupMessageService {
         } catch (Exception e) { throw new IllegalStateException("store group message", e); }
     }
     public List<String> pull(long groupId, long userId, long cursor, int limit) {
-        if (!Boolean.TRUE.equals(redis.opsForSet().isMember(membersKey(groupId), String.valueOf(userId)))) throw new IllegalArgumentException("user is not a group member");
+        if (jdbc.queryForObject("SELECT COUNT(*) FROM group_member WHERE group_id=? AND user_id=?", Integer.class, groupId, userId) == 0) throw new IllegalArgumentException("user is not a group member");
         List<String> ids = new ArrayList<>(redis.opsForZSet().rangeByScore("im:group:messages:" + groupId, cursor + 1, Double.MAX_VALUE, 0, limit));
         if (ids.isEmpty()) {
-            Long memberCount = redis.opsForSet().size(membersKey(groupId));
+            Integer memberCount = jdbc.queryForObject("SELECT COUNT(*) FROM group_member WHERE group_id=?", Integer.class, groupId);
             if (memberCount != null && memberCount >= writeFanoutLimit) {
                 // Large groups have no per-member inbox rows. MySQL remains
                 // the durable source when the Redis read index is incomplete.
@@ -85,9 +86,9 @@ public class GroupMessageService {
                 + "ON DUPLICATE KEY UPDATE last_read_sequence=GREATEST(last_read_sequence, VALUES(last_read_sequence))",
                 groupId, userId, cursor);
     }
-    private synchronized long nextSequence(long groupId) {
+    private long nextSequence(long groupId) {
         jdbc.update("INSERT INTO group_sequence (group_id, next_sequence) VALUES (?, 1) ON DUPLICATE KEY UPDATE group_id=group_id", groupId);
-        Long value = jdbc.queryForObject("SELECT next_sequence FROM group_sequence WHERE group_id=?", Long.class, groupId);
+        Long value = jdbc.queryForObject("SELECT next_sequence FROM group_sequence WHERE group_id=? FOR UPDATE", Long.class, groupId);
         long sequence = value == null ? 1L : value;
         jdbc.update("UPDATE group_sequence SET next_sequence=? WHERE group_id=?", sequence + 1, groupId);
         return sequence;
