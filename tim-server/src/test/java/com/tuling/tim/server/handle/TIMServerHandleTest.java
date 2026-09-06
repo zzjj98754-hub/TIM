@@ -5,6 +5,8 @@ import com.tuling.tim.server.util.ConnectionSession;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TIMServerHandleTest {
     @Test
@@ -15,5 +17,11 @@ class TIMServerHandleTest {
         TIMServerHandle.trustSessionIdentity(message, new ConnectionSession(42L, "session", 7L));
 
         assertEquals(42L, message.getFromUserId());
+    }
+
+    @Test
+    void businessFrameRequiresAuthenticatedSession() {
+        assertFalse(TIMServerHandle.isAuthenticated(null));
+        assertTrue(TIMServerHandle.isAuthenticated(new ConnectionSession(42L, "session", 7L)));
     }
 }
